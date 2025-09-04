@@ -21,6 +21,10 @@ USE_SOCKET    = 0
 # set USE_ELPA = 1 to use ELPA for parallel eigensolver. ELPA requires MKL or Scalapack
 USE_ELPA      = 0
 
+# set USE_WANNIER = 1 to use wannier support. WANNIER_DIR should be set to the path of libwannier.a
+USE_WANNIER   = 1
+WANNIER_DIR  = /home/lzh/Softwares/qe-7.3/external/wannier90/libwannier.a
+
 # Enable SIMD vectorization for complex stencil routines
 # CAUTION: for some compilers this results in wrong results! Use for intel/19.0.3 or later versions
 ENABLE_SIMD_COMPLEX = 1
@@ -45,6 +49,12 @@ USE_ACCELGT = 0
 CPPFLAGS = -Iinclude/ -Ixc/exx/include -Ixc/vdW/d3/include -Ixc/vdW/vdWDF/include -Ixc/mgga/include -IlinearScaling/include -Iofdft/ -Icyclix/include -Icyclix/mlff -IhighT/mlff -Imlff/ -IhighT/include \
            -Iatom/include -Iatom/mgga_atom/include -Iatom/exx_atom/include -Ixc/hubbard/include
 LDLIBS   = -lrt
+
+ifeq ($(USE_WANNIER), 1)
+CPPFLAGS += -DUSE_WANNIER
+LDLIBS += $(WANNIER_DIR)
+LDLIBS += -lifport -lifcoremt -limf 
+endif
 
 ifeq ($(USE_MKL), 1)
 CPPFLAGS += -m64 -I${MKLROOT}/include -DUSE_MKL
@@ -141,7 +151,10 @@ endif
 
 
 LIBBASE = ../lib/sparc
+OBJDIR  = obj
 TESTBASE = ../.ci
+
+OBJS = $(addprefix $(OBJDIR)/, $(OBJSC))
 
 override CC=mpicc
 
@@ -151,12 +164,19 @@ all: sparc
 # %.o : %.c
 # 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
-sparc: $(OBJSC)
+$(OBJDIR)/%.o : %.c | $(OBJDIR)
+	@mkdir -p $(@D)
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
+
+$(OBJDIR):
+	mkdir -p $(OBJDIR)
+
+sparc: $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $(LIBBASE) $^ $(LDLIBS)
 
 .PHONY: clean
 clean:
-	rm -f  $(OBJSC) $(LIBBASE)
+	rm -rf  $(OBJDIR) $(LIBBASE)
 	rm -f socket/*.o
 test: ../tests/SPARC_testing_script.py
 	cd ../tests; python SPARC_testing_script.py
