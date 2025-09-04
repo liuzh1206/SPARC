@@ -1185,6 +1185,13 @@ typedef struct _SPARC_OBJ{
     char InDensDCubFilename[L_STRING]; 
     int densfilecount;
     int readInitDens; // flag for reading inital density
+#ifdef USE_WANNIER
+    /* Wannier */
+    int wannierFlag; // flag for wannier calculation
+    int wannier_num_wann; // number of wannier functions
+    int wannier_num_band; // number of bands used to construct wannier functions
+    char wannier_win[L_STRING * 1009]; // wannier win file
+#endif
    /* Socket interface
       Please keep this section as the last block in SPARC_OBJ definition,
       add new features before this block.
@@ -1513,6 +1520,14 @@ typedef struct _SPARC_INPUT_OBJ{
     char InDensDCubFilename[L_STRING]; 
     int densfilecount;
     int readInitDens; // flag for reading inital density    
+
+    /* Wannier support */
+#ifdef USE_WANNIER
+    int wannierFlag;        // Flag for wannier support
+    int wannierMMNAMNFlag; // Flag for wannier MMN and MNF files
+    int wannier_num_wann;      // Number of bands for wannier
+    char wannier_win[L_STRING* 1000]; // Wannier input file name
+#endif
 
     /* Socket interface
        Please keep the socket interface as the last block in the SPARC_INPUT_OBJ

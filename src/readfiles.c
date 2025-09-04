@@ -1017,6 +1017,26 @@ void read_input(SPARC_INPUT_OBJ *pSPARC_Input, SPARC_OBJ *pSPARC) {
         } else if (strcmpi(str,"RELAX_PRESSURE:") == 0) {    
             fscanf(input_fp,"%lf",&pSPARC_Input->relaxPrTarget); // input in GPa
             fscanf(input_fp, "%*[^\n]\n");
+#ifdef USE_WANNIER
+        } else if (strcmpi(str, "WANNIER_FLAG:") == 0){
+            fscanf(input_fp, "%d", &pSPARC_Input->wannierFlag);
+            fscanf(input_fp, "%*[^\n]\n");
+        } else if (strcmpi(str, "WANNIER_AMN_MMN_FLAG:") == 0){
+            fscanf(input_fp, "%d", &pSPARC_Input->wannierFlag);
+            fscanf(input_fp, "%*[^\n]\n");
+        } else if (strcmpi(str, "WANNIER_NUM_WANN:") == 0){
+            fscanf(input_fp, "%d", &pSPARC_Input->wannier_num_wann);
+            fscanf(input_fp, "%*[^\n]\n");
+        } else if (strcmpi(str, "WANNIER_WIN:") == 0){
+            fscanf(input_fp, "%[^\"]%*c", (char*)NULL); // skip leading spaces and first quote
+            fscanf(input_fp, " \"%[^\"]", pSPARC_Input->wannier_win);
+            fscanf(input_fp, "%*[^\n]\n");
+#ifdef DEBUG
+            printf("WANNIER_FLAG: %d\n", pSPARC_Input->wannierFlag);
+            printf("WANNIER_NUM_WANN: %d\n", pSPARC_Input->wannier_num_wann);
+            printf("WANNIER_WIN: %s\n", pSPARC_Input->wannier_win);
+#endif
+#endif
         } else {
             printf("\nCannot recognize input variable identifier: \"%s\"\n",str);
             exit(EXIT_FAILURE);
