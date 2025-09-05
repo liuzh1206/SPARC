@@ -23,7 +23,7 @@ USE_ELPA      = 0
 
 # set USE_WANNIER = 1 to use wannier support. WANNIER_DIR should be set to the path of libwannier.a
 USE_WANNIER   = 1
-WANNIER_DIR  = /home/lzh/Softwares/qe-7.3/external/wannier90/libwannier.a
+WANNIER_DIR  = path_to_wannier_library/libwannier.a
 
 # Enable SIMD vectorization for complex stencil routines
 # CAUTION: for some compilers this results in wrong results! Use for intel/19.0.3 or later versions
