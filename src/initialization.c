@@ -970,6 +970,13 @@ void set_defaults(SPARC_INPUT_OBJ *pSPARC_Input, SPARC_OBJ *pSPARC) {
     // DFT+U
     pSPARC_Input->is_hubbard = 0;
 
+#ifdef USE_WANNIER
+    pSPARC_Input->wannierFlag = 0;
+    pSPARC_Input->wannierMMNAMNFlag = 0;
+    pSPARC_Input->wannier_num_wann = 0;
+    strncpy(pSPARC_Input->wannier_win, "", strlen(""));
+#endif
+
     /* Default socket options
        Note to future developers: please keep the USE_SOCKET macro
        as the LAST PART of the initialization function!!
