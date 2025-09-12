@@ -1188,9 +1188,12 @@ typedef struct _SPARC_OBJ{
     /* Wannier */
 #ifdef USE_WANNIER
     int wannierFlag; // flag for wannier calculation
+    int wannierMMNAMNFlag; // Flag for wannier MMN and MNF files
     int wannier_num_wann; // number of wannier functions
     int wannier_num_band; // number of bands used to construct wannier functions
     char wannier_win[L_STRING * 1000]; // wannier win file
+    double *wannier_mmn; // wannier MMN matrix
+    double *wannier_amn; // wannier AMN matrix
 #endif
    /* Socket interface
       Please keep this section as the last block in SPARC_OBJ definition,

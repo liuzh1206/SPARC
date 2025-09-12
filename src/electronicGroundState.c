@@ -57,6 +57,10 @@
 #include "locOrbRoutines.h"
 #include "occupationMatrix.h"
 
+#ifdef USE_WANNIER
+#include "mlwf.h"
+#endif
+
 #ifdef USE_EVA_MODULE
 #include "ExtVecAccel/ExtVecAccel.h"
 #endif
@@ -73,6 +77,11 @@ void Calculate_Properties(SPARC_OBJ *pSPARC) {
         Calculate_electronicGroundState(pSPARC);
     else
         MLFF_call(pSPARC);
+#ifdef USE_WANNIER
+    if (pSPARC->wannierFlag == 1) {
+        Generate_Wannier_Inputs(pSPARC);
+    }
+#endif
 }
 
 /**
@@ -377,6 +386,19 @@ void Calculate_electronicGroundState(SPARC_OBJ *pSPARC) {
         if (rank == 0) printf("Time for printing energy density: %.3f ms\n", (t2-t1)*1e3);
         #endif
     }
+#ifdef USE_WANNIER
+    if (pSPARC->wannierFlag == 1) {
+        #ifdef DEBUG
+        double t1, t2;
+        t1 = MPI_Wtime();
+        #endif
+
+        #ifdef DEBUG
+        t2 = MPI_Wtime();
+        if (rank == 0) printf("Time for printing wannier inputs: %.3f ms\n", (t2-t1)*1e3);
+        #endif
+    }
+#endif
 }
 
 

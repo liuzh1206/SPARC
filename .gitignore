@@ -4,6 +4,7 @@
 sparc-EVA
 sparc
 .vscode
+.cache
 compile_commands.json
 .clang-format
 dev_tests/

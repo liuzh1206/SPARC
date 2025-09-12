@@ -1598,6 +1598,12 @@ void SPARC_copy_input(SPARC_OBJ *pSPARC, SPARC_INPUT_OBJ *pSPARC_Input) {
     strncpy(pSPARC->InDensTCubFilename, pSPARC_Input->InDensTCubFilename,sizeof(pSPARC->InDensTCubFilename));
     strncpy(pSPARC->InDensUCubFilename, pSPARC_Input->InDensUCubFilename,sizeof(pSPARC->InDensUCubFilename));
     strncpy(pSPARC->InDensDCubFilename, pSPARC_Input->InDensDCubFilename,sizeof(pSPARC->InDensDCubFilename));
+#ifdef USE_WANNIER
+    pSPARC->wannierFlag = pSPARC_Input->wannierFlag;
+    pSPARC->wannier_num_band = pSPARC_Input->wannier_num_wann;
+    pSPARC->wannierMMNAMNFlag = pSPARC_Input->wannierMMNAMNFlag;
+    strncpy(pSPARC->wannier_win, pSPARC_Input->wannier_win, sizeof(pSPARC->wannier_win));
+#endif
     
     /* Socket interface section
      TODO: should we move the socket to a later section?

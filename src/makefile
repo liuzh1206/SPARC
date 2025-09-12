@@ -23,8 +23,7 @@ USE_ELPA      = 0
 
 # set USE_WANNIER = 1 to use wannier support. WANNIER_DIR should be set to the path of libwannier.a
 USE_WANNIER   = 1
-# WANNIER_DIR  = path_to_wannier_library/libwannier.a
-WANNIER_DIR  = /home/lzh/Softwares/q-e/external/wannier90/libwannier.a
+WANNIER_DIR  = path_to_wannier_library/libwannier.a
 
 # Enable SIMD vectorization for complex stencil routines
 # CAUTION: for some compilers this results in wrong results! Use for intel/19.0.3 or later versions
@@ -138,6 +137,11 @@ OBJSC = main.o initialization.o readfiles.o atomdata.o parallelization.o relax.o
         atom/exx_atom/exxToolsAtom.o atom/exx_atom/exxPotentialEnergyAtom.o \
         xc/hubbard/hubbardInitialization.o xc/hubbard/locOrbRoutines.o xc/hubbard/occupationMatrix.o \
         xc/hubbard/hubbardForce.o xc/hubbard/hubbardStress.o xc/hubbard/hubbardPressure.o
+
+
+ifeq ($(USE_WANNIER), 1)
+OBJSC += mlwf.o
+endif
 
 # Switch the socket compilation
 # For future developers: please keep the socket options separate from the
