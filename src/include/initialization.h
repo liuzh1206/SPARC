@@ -196,8 +196,6 @@ Exchange Correlation
                  "vdw2"   vdW-DF2                        ivdw=2
 **************************************************************** */
 void xc_decomposition(SPARC_OBJ *pSPARC);
-#endif // INITIALIZATION_H 
-
-
-
-
+void Cross_Product(double *x, double *y, double *z, double a1, double a2,
+                   double a3, double b1, double b2, double b3);
+#endif // INITIALIZATION_H

@@ -73,15 +73,15 @@
  * @brief   Calculate properties for fixed atom positions using DFT or MLFF
  */
 void Calculate_Properties(SPARC_OBJ *pSPARC) {
-    if (pSPARC->mlff_flag < 1)
+    if (pSPARC->mlff_flag < 1){
         Calculate_electronicGroundState(pSPARC);
+#ifdef USE_WANNIER
+        if (pSPARC->wannierFlag == 1) Generate_Wannier_Inputs(pSPARC);
+#endif
+    }
     else
         MLFF_call(pSPARC);
-#ifdef USE_WANNIER
-    if (pSPARC->wannierFlag == 1) {
-        Generate_Wannier_Inputs(pSPARC);
-    }
-#endif
+
 }
 
 /**
@@ -386,19 +386,6 @@ void Calculate_electronicGroundState(SPARC_OBJ *pSPARC) {
         if (rank == 0) printf("Time for printing energy density: %.3f ms\n", (t2-t1)*1e3);
         #endif
     }
-#ifdef USE_WANNIER
-    if (pSPARC->wannierFlag == 1) {
-        #ifdef DEBUG
-        double t1, t2;
-        t1 = MPI_Wtime();
-        #endif
-
-        #ifdef DEBUG
-        t2 = MPI_Wtime();
-        if (rank == 0) printf("Time for printing wannier inputs: %.3f ms\n", (t2-t1)*1e3);
-        #endif
-    }
-#endif
 }
 
 

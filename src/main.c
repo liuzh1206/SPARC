@@ -26,8 +26,7 @@ int main(int argc, char *argv[]) {
     // set up MPI
     MPI_Init(&argc, &argv);
     // get communicator size and my rank
-    MPI_Comm comm = MPI_COMM_WORLD;
-    int nproc, rank;
+    MPI_Comm comm = MPI_COMM_WORLD; int nproc, rank;
     MPI_Comm_size(comm, &nproc);
     MPI_Comm_rank(comm, &rank);
     

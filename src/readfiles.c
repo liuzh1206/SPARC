@@ -1018,6 +1018,9 @@ void read_input(SPARC_INPUT_OBJ *pSPARC_Input, SPARC_OBJ *pSPARC) {
             fscanf(input_fp,"%lf",&pSPARC_Input->relaxPrTarget); // input in GPa
             fscanf(input_fp, "%*[^\n]\n");
 #ifdef USE_WANNIER
+        } else if (strcmpi(str, "KPT_SYM:") == 0){
+            fscanf(input_fp, "%d", &pSPARC_Input->kptsSymFlag);
+            fscanf(input_fp, "%*[^\n]\n");
         } else if (strcmpi(str, "WANNIER_FLAG:") == 0){
             fscanf(input_fp, "%d", &pSPARC_Input->wannierFlag);
             fscanf(input_fp, "%*[^\n]\n");

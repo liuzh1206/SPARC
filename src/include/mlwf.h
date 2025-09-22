@@ -18,10 +18,11 @@ void wannier_setup_(const char *seed_name,
                     const double *kpt_latt,      // double[3*num_kpts]
                     const int *num_bands_tot,
                     const int *num_atoms,
-                    const char *atom_symbols, // char[num_atoms][LEN]
+                    const char atom_symbols[][3], // char[num_atoms][LEN]
                     const double *atoms_cart, // double[3*num_atoms]
                     const int *gamma_only,
-                    const int *spinors, int *nntot,
+                    const int *spinors,
+                    int *nntot,
                     int *nnlist, // int[num_kpts][num_nnmax]
                     int *nncell, // int[3][num_kpts][num_nnmax]
                     int *num_bands,
@@ -47,3 +48,5 @@ void wannier_setup_(const char *seed_name,
 void Calculate_MMN(SPARC_OBJ *pSPARC);
 
 void Calculate_AMN(SPARC_OBJ *pSPARC);
+
+void Get_All_Cart_Coord(SPARC_OBJ *pSPARC);

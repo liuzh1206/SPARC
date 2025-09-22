@@ -644,6 +644,9 @@ typedef struct _SPARC_OBJ{
     int Kx;             // number of kpoints in x direction
     int Ky;             // number of kpoints in y direction
     int Kz;             // number of kpoints in z direction
+#ifdef USE_WANNIER
+    int kptsSymFlag;     // k-point symmetry flag
+#endif
     int Nkpts_sym;      // number of k-points after symmetry reduction
     int NkptsGroup;     // number of k-point groups for parallelization
     int kptParalFlag;   // k-point parallelization flag
@@ -661,6 +664,11 @@ typedef struct _SPARC_OBJ{
     double *k1_loc;
     double *k2_loc;
     double *k3_loc;
+#ifdef USE_WANNIER
+    double *k1_fc;    // k-points in fractional coordinates
+    double *k2_fc;
+    double *k3_fc;
+#endif
 
     /* system description */
     int BC;             // boundary conditions
@@ -1330,6 +1338,9 @@ typedef struct _SPARC_INPUT_OBJ{
     int Kx;             // number of kpoints in x direction
     int Ky;             // number of kpoints in y direction
     int Kz;             // number of kpoints in z direction
+#ifdef USE_WANNIER
+    int kptsSymFlag;    // flag for k-point symmetry reduction
+#endif
     int NkptsGroup;     // number of k-point groups for parallelization
     int kctr;           // counter for k points  
     

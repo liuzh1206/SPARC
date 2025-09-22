@@ -122,6 +122,11 @@ void calculate_kpts_bandstruct(SPARC_OBJ *pSPARC) {
         pSPARC->k1[i] = pSPARC->kredx[i]*b1_x + pSPARC->kredy[i]*b2_x + pSPARC->kredz[i]*b3_x;
         pSPARC->k2[i] = pSPARC->kredx[i]*b1_y + pSPARC->kredy[i]*b2_y + pSPARC->kredz[i]*b3_y;
         pSPARC->k3[i] = pSPARC->kredx[i]*b1_z + pSPARC->kredy[i]*b2_z + pSPARC->kredz[i]*b3_z;
+#ifdef USE_WANNIER
+        pSPARC->k1_fc[i] = pSPARC->kredx[i];
+        pSPARC->k2_fc[i] = pSPARC->kredy[i];
+        pSPARC->k3_fc[i] = pSPARC->kredz[i];
+#endif
         pSPARC->k1_inpt_kpt[i] = pSPARC->kredx[i];
         pSPARC->k2_inpt_kpt[i] = pSPARC->kredy[i];
         pSPARC->k3_inpt_kpt[i] = pSPARC->kredz[i];
@@ -133,6 +138,11 @@ void calculate_kpts_bandstruct(SPARC_OBJ *pSPARC) {
         pSPARC->k1[start_ind] = pSPARC->kredx[i*2]*b1_x + pSPARC->kredy[i*2]*b2_x + pSPARC->kredz[i*2]*b3_x;
         pSPARC->k2[start_ind] = pSPARC->kredx[i*2]*b1_y + pSPARC->kredy[i*2]*b2_y + pSPARC->kredz[i*2]*b3_y;
         pSPARC->k3[start_ind] = pSPARC->kredx[i*2]*b1_z + pSPARC->kredy[i*2]*b2_z + pSPARC->kredz[i*2]*b3_z;
+#ifdef USE_WANNIER
+        pSPARC->k1_fc[start_ind] = pSPARC->kredx[i*2];
+        pSPARC->k2_fc[start_ind] = pSPARC->kredy[i*2];
+        pSPARC->k3_fc[start_ind] = pSPARC->kredz[i*2];
+#endif
         pSPARC->k1_inpt_kpt[start_ind] = pSPARC->kredx[i*2];
         pSPARC->k2_inpt_kpt[start_ind] = pSPARC->kredy[i*2];
         pSPARC->k3_inpt_kpt[start_ind] = pSPARC->kredz[i*2];
@@ -140,6 +150,11 @@ void calculate_kpts_bandstruct(SPARC_OBJ *pSPARC) {
         pSPARC->k1[end_ind] = pSPARC->kredx[i*2+1]*b1_x + pSPARC->kredy[i*2+1]*b2_x + pSPARC->kredz[i*2+1]*b3_x;
         pSPARC->k2[end_ind] = pSPARC->kredx[i*2+1]*b1_y + pSPARC->kredy[i*2+1]*b2_y + pSPARC->kredz[i*2+1]*b3_y;
         pSPARC->k3[end_ind] = pSPARC->kredx[i*2+1]*b1_z + pSPARC->kredy[i*2+1]*b2_z + pSPARC->kredz[i*2+1]*b3_z;
+#ifdef USE_WANNIER
+        pSPARC->k1_fc[end_ind] = pSPARC->kredx[i*2+1];
+        pSPARC->k2_fc[end_ind] = pSPARC->kredy[i*2+1];
+        pSPARC->k3_fc[end_ind] = pSPARC->kredz[i*2+1];
+#endif
         pSPARC->k1_inpt_kpt[end_ind] = pSPARC->kredx[i*2+1];
         pSPARC->k2_inpt_kpt[end_ind] = pSPARC->kredy[i*2+1];
         pSPARC->k3_inpt_kpt[end_ind] = pSPARC->kredz[i*2+1];
@@ -155,6 +170,11 @@ void calculate_kpts_bandstruct(SPARC_OBJ *pSPARC) {
             pSPARC->k1[j] = tmpx*b1_x + tmpy*b2_x + tmpz*b3_x; 
             pSPARC->k2[j] = tmpx*b1_y + tmpy*b2_y + tmpz*b3_y;
             pSPARC->k3[j] = tmpx*b1_z + tmpy*b2_z + tmpz*b3_z;
+#ifdef USE_WANNIER
+            pSPARC->k1_fc[j] = tmpx;
+            pSPARC->k2_fc[j] = tmpy;
+            pSPARC->k3_fc[j] = tmpz;
+#endif
             pSPARC->k1_inpt_kpt[j] = tmpx;
             pSPARC->k2_inpt_kpt[j] = tmpy;
             pSPARC->k3_inpt_kpt[j] = tmpz;
@@ -172,6 +192,10 @@ void calculate_kpts_bandstruct(SPARC_OBJ *pSPARC) {
         for (int nk = 0; nk < pSPARC->Nkpts; nk++) { 
             printf("inpt k1[%2d]: %8.4f, k2[%2d]: %8.4f, k3[%2d]: %8.4f, kptwt[%2d]: %.3f \n",
                 nk,pSPARC->k1_inpt_kpt[nk],nk,pSPARC->k2_inpt_kpt[nk],nk,pSPARC->k3_inpt_kpt[nk],nk,pSPARC->kptWts[nk]);
+#ifdef USE_WANNIER
+            printf("fc  k1[%2d]: %8.4f, k2[%2d]: %8.4f, k3[%2d]: %8.4f \n",
+                nk,pSPARC->k1_fc[nk],nk,pSPARC->k2_fc[nk],nk,pSPARC->k3_fc[nk]);
+#endif
         }
     }
     #endif
@@ -971,6 +995,7 @@ void set_defaults(SPARC_INPUT_OBJ *pSPARC_Input, SPARC_OBJ *pSPARC) {
     pSPARC_Input->is_hubbard = 0;
 
 #ifdef USE_WANNIER
+    pSPARC_Input->kptsSymFlag = 1;
     pSPARC_Input->wannierFlag = 0;
     pSPARC_Input->wannierMMNAMNFlag = 0;
     pSPARC_Input->wannier_num_wann = 0;
@@ -1599,6 +1624,7 @@ void SPARC_copy_input(SPARC_OBJ *pSPARC, SPARC_INPUT_OBJ *pSPARC_Input) {
     strncpy(pSPARC->InDensUCubFilename, pSPARC_Input->InDensUCubFilename,sizeof(pSPARC->InDensUCubFilename));
     strncpy(pSPARC->InDensDCubFilename, pSPARC_Input->InDensDCubFilename,sizeof(pSPARC->InDensDCubFilename));
 #ifdef USE_WANNIER
+    pSPARC->kptsSymFlag = pSPARC_Input->kptsSymFlag;
     pSPARC->wannierFlag = pSPARC_Input->wannierFlag;
     pSPARC->wannier_num_band = pSPARC_Input->wannier_num_wann;
     pSPARC->wannierMMNAMNFlag = pSPARC_Input->wannierMMNAMNFlag;
@@ -2646,6 +2672,11 @@ void SPARC_copy_input(SPARC_OBJ *pSPARC, SPARC_INPUT_OBJ *pSPARC_Input) {
         pSPARC->k1 = (double *)malloc(pSPARC->Nkpts_sym * sizeof(double));
         pSPARC->k2 = (double *)malloc(pSPARC->Nkpts_sym * sizeof(double));
         pSPARC->k3 = (double *)malloc(pSPARC->Nkpts_sym * sizeof(double));
+#ifdef USE_WANNIER
+        pSPARC->k1_fc = (double *)malloc(pSPARC->Nkpts_sym * sizeof(double));
+        pSPARC->k2_fc = (double *)malloc(pSPARC->Nkpts_sym * sizeof(double));
+        pSPARC->k3_fc = (double *)malloc(pSPARC->Nkpts_sym * sizeof(double));
+#endif
         calculate_kpts_bandstruct(pSPARC);
     } else {
         // number of k-points after symmetry reduction (currently only
@@ -2660,6 +2691,11 @@ void SPARC_copy_input(SPARC_OBJ *pSPARC, SPARC_INPUT_OBJ *pSPARC_Input) {
         pSPARC->k1 = (double *)malloc(pSPARC->Nkpts_sym * sizeof(double));
         pSPARC->k2 = (double *)malloc(pSPARC->Nkpts_sym * sizeof(double));
         pSPARC->k3 = (double *)malloc(pSPARC->Nkpts_sym * sizeof(double));
+#ifdef USE_WANNIER
+        pSPARC->k1_fc = (double *)malloc(pSPARC->Nkpts_sym * sizeof(double));
+        pSPARC->k2_fc = (double *)malloc(pSPARC->Nkpts_sym * sizeof(double));
+        pSPARC->k3_fc = (double *)malloc(pSPARC->Nkpts_sym * sizeof(double));
+#endif
         // calculate the k point and weights (shift in kpt may apply)
         Calculate_kpoints(pSPARC);
     }
@@ -3292,6 +3328,17 @@ void Calculate_kpoints(SPARC_OBJ *pSPARC) {
                 k3 = k3_red * 2.0 * M_PI / Lz;
 
                 flag = 1;
+#ifdef USE_WANNIER
+                double k1_fc, k2_fc, k3_fc;
+
+                k1_fc = k1_red;
+                k2_fc = k2_red;
+                k3_fc = k3_red;
+                // closed k-point symmetry
+                if (rank == 0)
+                printf("kptsSymFlag = %d\n", pSPARC->kptsSymFlag);
+                if (pSPARC->kptsSymFlag == 1) {
+#endif
                 for (nk = 0; nk < k; nk++) {
                     if (   (fabs(k1 + pSPARC->k1[nk]) < TEMP_TOL || fabs(k1 + pSPARC->k1[nk] - sumx) < TEMP_TOL) 
                         && (fabs(k2 + pSPARC->k2[nk]) < TEMP_TOL || fabs(k2 + pSPARC->k2[nk] - sumy) < TEMP_TOL)
@@ -3300,11 +3347,19 @@ void Calculate_kpoints(SPARC_OBJ *pSPARC) {
                         break;
                     }
                 }
+#ifdef USE_WANNIER
+            }
+#endif
 
                 if (flag) {
                     pSPARC->k1[k] = k1;
                     pSPARC->k2[k] = k2;
                     pSPARC->k3[k] = k3;
+#ifdef USE_WANNIER
+                    pSPARC->k1_fc[k] = k1_fc;
+                    pSPARC->k2_fc[k] = k2_fc;
+                    pSPARC->k3_fc[k] = k3_fc;
+#endif
                     pSPARC->kptWts[k]= 1.0;
                     k++;
                 } else {
