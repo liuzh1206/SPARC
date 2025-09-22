@@ -2,6 +2,7 @@
 *.o
 .DS_Store
 sparc-EVA
+obj
 sparc
 .vscode
 .cache
