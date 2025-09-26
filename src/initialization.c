@@ -1626,9 +1626,11 @@ void SPARC_copy_input(SPARC_OBJ *pSPARC, SPARC_INPUT_OBJ *pSPARC_Input) {
 #ifdef USE_WANNIER
     pSPARC->kptsSymFlag = pSPARC_Input->kptsSymFlag;
     pSPARC->wannierFlag = pSPARC_Input->wannierFlag;
-    pSPARC->wannier_num_band = pSPARC_Input->wannier_num_wann;
+    pSPARC->wannier_num_wann = pSPARC_Input->wannier_num_wann;
     pSPARC->wannierMMNAMNFlag = pSPARC_Input->wannierMMNAMNFlag;
     strncpy(pSPARC->wannier_win, pSPARC_Input->wannier_win, sizeof(pSPARC->wannier_win));
+    MPI_Bcast(&pSPARC->wannierFlag, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&pSPARC->kptsSymFlag, 1, MPI_INT, 0, MPI_COMM_WORLD);
 #endif
     
     /* Socket interface section
@@ -3335,8 +3337,6 @@ void Calculate_kpoints(SPARC_OBJ *pSPARC) {
                 k2_fc = k2_red;
                 k3_fc = k3_red;
                 // closed k-point symmetry
-                if (rank == 0)
-                printf("kptsSymFlag = %d\n", pSPARC->kptsSymFlag);
                 if (pSPARC->kptsSymFlag == 1) {
 #endif
                 for (nk = 0; nk < k; nk++) {

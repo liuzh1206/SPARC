@@ -1025,7 +1025,7 @@ void read_input(SPARC_INPUT_OBJ *pSPARC_Input, SPARC_OBJ *pSPARC) {
             fscanf(input_fp, "%d", &pSPARC_Input->wannierFlag);
             fscanf(input_fp, "%*[^\n]\n");
         } else if (strcmpi(str, "WANNIER_AMN_MMN_FLAG:") == 0){
-            fscanf(input_fp, "%d", &pSPARC_Input->wannierFlag);
+            fscanf(input_fp, "%d", &pSPARC_Input->wannierMMNAMNFlag);
             fscanf(input_fp, "%*[^\n]\n");
         } else if (strcmpi(str, "WANNIER_NUM_WANN:") == 0){
             fscanf(input_fp, "%d", &pSPARC_Input->wannier_num_wann);
