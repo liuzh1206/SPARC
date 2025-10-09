@@ -37,6 +37,8 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
                    int *nncell, int num_bands,
                    double complex MMN_Matrix[][nntot][num_bands][num_bands]);
 
+void Write_EIG(SPARC_OBJ *pSPARC);
+
 void Calculate_AMN(SPARC_OBJ *pSPARC);
 
 void Get_All_Cart_Coord(SPARC_OBJ *pSPARC);
