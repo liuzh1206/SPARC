@@ -8,13 +8,17 @@
 
 #include "mlwf.h"
 #include "initialization.h"
+#include "parallelization.h"
 
+#include <assert.h>
 #include <complex.h>
 #include <ctype.h>
 #include <math.h>
-#include <mpi.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define max(x, y) ((x) > (y) ? (x) : (y))
+#define min(x, y) ((x) < (y) ? (x) : (y))
 
 void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
 
@@ -379,8 +383,8 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    double complex
-        MMN_Matrix[num_kpts * pSPARC->Nspinor][nntot][num_bands][num_bands];
+    double complex MMN_Matrix[num_kpts * pSPARC->Nspinor_eig * pSPARC->Nspin]
+                             [nntot][num_bands][num_bands];
 
     // generate wannier inputs
     Calculate_MMN(pSPARC, num_kpts, nntot, nnlist, nncell, num_bands,
@@ -444,13 +448,29 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
                                 fprintf(fp_mmn, "%18.12f %18.12f\n",
                                         creal(mmn_element), cimag(mmn_element));
                             else {
-                                mmn_element = MMN_Matrix[kpt][nn][m][n];
-                                fprintf(fp_mmn_up, "%18.12f %18.12f\n",
-                                        creal(mmn_element), cimag(mmn_element));
-                                mmn_element =
-                                    MMN_Matrix[pSPARC->Nkpts + kpt][nn][m][n];
-                                fprintf(fp_mmn_dn, "%18.12f %18.12f\n",
-                                        creal(mmn_element), cimag(mmn_element));
+                                for (int spin = 0; spin < pSPARC->Nspin;
+                                     spin++) {
+                                    for (int s = 0; s < pSPARC->Nspinor_eig;
+                                         s++) {
+                                        mmn_element =
+                                            MMN_Matrix[spin * pSPARC->Nkpts *
+                                                           pSPARC->Nspinor_eig +
+                                                       kpt *
+                                                           pSPARC->Nspinor_eig +
+                                                       s][nn][m][n];
+                                        if (spin == 0 && s == 0) {
+                                            fprintf(fp_mmn_up,
+                                                    "%18.12f %18.12f\n",
+                                                    creal(mmn_element),
+                                                    cimag(mmn_element));
+                                        } else {
+                                            fprintf(fp_mmn_dn,
+                                                    "%18.12f %18.12f\n",
+                                                    creal(mmn_element),
+                                                    cimag(mmn_element));
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -478,120 +498,273 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
 
 void Write_EIG(SPARC_OBJ *pSPARC) {
 
-    int rank;
-    int size;
+    int rank, rank_spincomm, rank_kptcomm;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm_rank(pSPARC->spincomm, &rank_spincomm);
+    MPI_Comm_rank(pSPARC->kptcomm, &rank_kptcomm);
 
-    int Nspin_spincomm[size];
-    int Nkpts_kptcomm[size];
-    int Nband_bandcomm[size];
-    int dispos[size];
-    int recivecounts[size];
+    if (!rank)
+        printf("\nStart writing eigenvalues ...\n");
 
-    double lambda[pSPARC->Nkpts_sym * pSPARC->Nspinor * pSPARC->Nstates];
+    // only root processes of kptcomms will enter
+    if (pSPARC->kptcomm_index < 0 || rank_kptcomm != 0)
+        return;
 
-    char eig_filename[L_STRING];
-    char eig_filename_up[L_STRING];
-    char eig_filename_dn[L_STRING];
+    int Nk = pSPARC->Nkpts_kptcomm;
+    int Ns = pSPARC->Nstates;
+    // number of kpoints assigned to each kptcomm
+    int *Nk_i = (int *)malloc(pSPARC->npkpt * sizeof(int));
+    double *kred_i = (double *)malloc(pSPARC->Nkpts_sym * 3 * sizeof(double));
+    int *kpt_displs = (int *)malloc((pSPARC->npkpt + 1) * sizeof(int));
 
-    if (pSPARC->spin_typ == 0)
-        snprintf(eig_filename, L_STRING, "%s.eig", pSPARC->filename);
-    else {
-        snprintf(eig_filename_up, L_STRING, "%s_up.eig", pSPARC->filename);
-        snprintf(eig_filename_dn, L_STRING, "%s_dn.eig", pSPARC->filename);
+    char EigenFilename[L_STRING];
+    char EigenFilename_up[L_STRING];
+    char EigenFilename_dn[L_STRING];
+    if (rank == 0) {
+        snprintf(EigenFilename, L_STRING, "%s.eig", pSPARC->filename);
+        snprintf(EigenFilename_up, L_STRING, "%s_up.eig", pSPARC->filename);
+        snprintf(EigenFilename_dn, L_STRING, "%s_dn.eig", pSPARC->filename);
     }
 
-    for (int i = 0; i < size; i++) {
-        Nspin_spincomm[i] = 0;
-        Nkpts_kptcomm[i] = 0;
-        Nband_bandcomm[i] = 0;
-        dispos[i] = 0;
-        recivecounts[i] = 0;
-    }
+    FILE *output_fp;
+    FILE *output_fp_up;
+    FILE *output_fp_dn;
+    // first create an empty file
+    if (rank == 0) {
+        if (pSPARC->Nspin == 1) {
+            output_fp = fopen(EigenFilename, "w");
 
-    MPI_Gather(&(pSPARC->Nspinor_spincomm), 1, MPI_INT, Nspin_spincomm, 1,
-               MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Gather(&(pSPARC->Nkpts_kptcomm), 1, MPI_INT, Nkpts_kptcomm, 1, MPI_INT,
-               0, MPI_COMM_WORLD);
-    MPI_Gather(&(pSPARC->Nband_bandcomm), 1, MPI_INT, Nband_bandcomm, 1,
-               MPI_INT, 0, MPI_COMM_WORLD);
-
-    for (int i = 0; i < size; i++) {
-        if (i == 0)
-            dispos[i] = 0;
-        else
-            dispos[i] = dispos[i - 1] + Nspin_spincomm[i - 1] *
-                                            Nkpts_kptcomm[i - 1] *
-                                            Nband_bandcomm[i - 1];
-        recivecounts[i] =
-            Nspin_spincomm[i] * Nkpts_kptcomm[i] * Nband_bandcomm[i];
-    }
-
-    MPI_Barrier(MPI_COMM_WORLD);
-    MPI_Gatherv(pSPARC->lambda,
-                pSPARC->Nspinor_spincomm * pSPARC->Nkpts_kptcomm *
-                    pSPARC->Nband_bandcomm,
-                MPI_DOUBLE, lambda, recivecounts, dispos, MPI_DOUBLE, 0,
-                MPI_COMM_WORLD);
-
-    if (!rank) {
-
-        FILE *fp_eig = NULL;
-        FILE *fp_eig_up = NULL;
-        FILE *fp_eig_dn = NULL;
-
-        if (pSPARC->spin_typ == 0) {
-            fp_eig = fopen(eig_filename, "w");
+            if (output_fp == NULL) {
+                printf("\nCannot open file \"%s\"\n", EigenFilename);
+                exit(EXIT_FAILURE);
+            }
+            fclose(output_fp);
         } else {
-            fp_eig_up = fopen(eig_filename_up, "w");
-            fp_eig_dn = fopen(eig_filename_dn, "w");
-        }
+            output_fp_up = fopen(EigenFilename_up, "w");
+            output_fp_dn = fopen(EigenFilename_dn, "w");
 
-        for (int spin = 0; spin < pSPARC->Nspinor; spin++) {
-            for (int kpt = 0; kpt < pSPARC->Nkpts; kpt++) {
-                for (int band = 0; band < pSPARC->Nstates; band++) {
-                    if (pSPARC->spin_typ == 0) {
-                        fprintf(
-                            fp_eig, "%5d %5d %18.12f\n", band + 1, kpt + 1,
-                            lambda[spin * pSPARC->Nkpts_sym * pSPARC->Nstates +
-                                   kpt * pSPARC->Nstates + band]);
-                    } else {
-                        if (spin == 0) {
-                            fprintf(fp_eig_up, "%5d %5d %18.12f\n", band + 1,
-                                    kpt + 1,
-                                    lambda[spin * pSPARC->Nkpts_sym *
-                                               pSPARC->Nstates +
-                                           kpt * pSPARC->Nstates + band]);
-                        } else {
-                            fprintf(fp_eig_dn, "%5d %5d %18.12f\n", band + 1,
-                                    kpt + 1,
-                                    lambda[spin * pSPARC->Nkpts_sym *
-                                               pSPARC->Nstates +
-                                           kpt * pSPARC->Nstates + band]);
+            if (output_fp_up == NULL) {
+                printf("\nCannot open file \"%s\"\n", EigenFilename_up);
+                exit(EXIT_FAILURE);
+            }
+            if (output_fp_dn == NULL) {
+                printf("\nCannot open file \"%s\"\n", EigenFilename_dn);
+                exit(EXIT_FAILURE);
+            }
+            fclose(output_fp_up);
+            fclose(output_fp_dn);
+        }
+    }
+
+    int sendcount, *recvcounts, *displs;
+    double *recvbuf_eig;
+    sendcount = 0;
+    recvcounts = NULL;
+    displs = NULL;
+    recvbuf_eig = NULL;
+
+    // first collect eigval over spin
+    if (pSPARC->npspin > 1) {
+        // set up receive buffer and receive counts in kptcomm roots with spin
+        // up
+        if (pSPARC->spincomm_index == 0) {
+            recvbuf_eig =
+                (double *)malloc(pSPARC->Nspin * Nk * Ns * sizeof(double));
+            recvcounts =
+                (int *)malloc(pSPARC->npspin * sizeof(int)); // npspin is 2
+            displs = (int *)malloc((pSPARC->npspin + 1) * sizeof(int));
+            int i;
+            displs[0] = 0;
+            for (i = 0; i < pSPARC->npspin; i++) {
+                recvcounts[i] = pSPARC->Nspin_spincomm * Nk * Ns;
+                displs[i + 1] = displs[i] + recvcounts[i];
+            }
+        }
+        // set up send info
+        sendcount = pSPARC->Nspin_spincomm * Nk * Ns;
+        MPI_Gatherv(pSPARC->lambda_sorted, sendcount, MPI_DOUBLE, recvbuf_eig,
+                    recvcounts, displs, MPI_DOUBLE, 0,
+                    pSPARC->spin_bridge_comm);
+
+        if (pSPARC->spincomm_index == 0) {
+            free(recvcounts);
+            free(displs);
+        }
+    } else {
+        recvbuf_eig = pSPARC->lambda_sorted;
+    }
+
+    double *eig_all = NULL;
+    int *displs_all;
+    displs_all = (int *)malloc((pSPARC->npkpt + 1) * sizeof(int));
+
+    if (pSPARC->npkpt > 1 && pSPARC->spincomm_index == 0) {
+        // set up receive buffer and receive counts in kptcomm roots with spin
+        // up
+        if (pSPARC->kptcomm_index == 0) {
+            int i;
+            eig_all = (double *)malloc(pSPARC->Nspin * pSPARC->Nkpts_sym * Ns *
+                                       sizeof(double));
+            recvcounts = (int *)malloc(pSPARC->npkpt * sizeof(int));
+            // collect all the number of kpoints assigned to each kptcomm
+            MPI_Gather(&Nk, 1, MPI_INT, Nk_i, 1, MPI_INT, 0,
+                       pSPARC->kpt_bridge_comm);
+            displs_all[0] = 0;
+            for (i = 0; i < pSPARC->npkpt; i++) {
+                recvcounts[i] = Nk_i[i] * pSPARC->Nspin * Ns;
+                displs_all[i + 1] = displs_all[i] + recvcounts[i];
+            }
+            // collect all the kpoints assigend to each kptcomm
+            // first set up sendbuf and recvcounts
+            int *kpt_recvcounts = (int *)malloc(pSPARC->npkpt * sizeof(int));
+            // int *kpt_displs     = (int *)malloc((pSPARC->npkpt+1) *
+            kpt_displs[0] = 0;
+            for (i = 0; i < pSPARC->npkpt; i++) {
+                kpt_recvcounts[i] = Nk_i[i] * 3;
+                kpt_displs[i + 1] = kpt_displs[i] + kpt_recvcounts[i];
+            }
+            free(kpt_recvcounts);
+        } else {
+            // collect all the number of kpoints assigned to each kptcomm
+            MPI_Gather(&Nk, 1, MPI_INT, Nk_i, 1, MPI_INT, 0,
+                       pSPARC->kpt_bridge_comm);
+            // collect all the kpoints assigend to each kptcomm
+            int kpt_recvcounts[1] = {0}, i;
+            // collect reduced kpoints from all kptcomms
+        }
+        // set up send info
+        sendcount = pSPARC->Nspin * Nk * Ns;
+        MPI_Gatherv(recvbuf_eig, sendcount, MPI_DOUBLE, eig_all, recvcounts,
+                    displs_all, MPI_DOUBLE, 0, pSPARC->kpt_bridge_comm);
+        if (pSPARC->kptcomm_index == 0) {
+            free(recvcounts);
+            // free(displs_all);
+        }
+    } else {
+        int i;
+        Nk_i[0] = Nk; // only one kptcomm
+        kpt_displs[0] = 0;
+        displs_all[0] = 0;
+        if (pSPARC->BC != 1) {
+            if (pSPARC->BandStructFlag == 1) {
+                for (i = 0; i < Nk; i++) {
+                    kred_i[3 * i] = pSPARC->k1_inpt_kpt[i];
+                    kred_i[3 * i + 1] = pSPARC->k2_inpt_kpt[i];
+                    kred_i[3 * i + 2] = pSPARC->k3_inpt_kpt[i];
+                }
+            } else {
+                for (i = 0; i < Nk; i++) {
+                    kred_i[3 * i] =
+                        pSPARC->k1_loc[i] * pSPARC->range_x / (2.0 * M_PI);
+                    kred_i[3 * i + 1] =
+                        pSPARC->k2_loc[i] * pSPARC->range_y / (2.0 * M_PI);
+                    kred_i[3 * i + 2] =
+                        pSPARC->k3_loc[i] * pSPARC->range_z / (2.0 * M_PI);
+                }
+            }
+        } else {
+            kred_i[0] = kred_i[1] = kred_i[2] = 0.0;
+        }
+        eig_all = recvbuf_eig;
+    }
+
+    // let root process print eigvals and occs to .eigen file
+    if (pSPARC->spincomm_index == 0) {
+        if (pSPARC->kptcomm_index == 0) {
+            // write to .eig file
+            int k, Kcomm_indx, i;
+            if (pSPARC->Nspin == 1) {
+                output_fp = fopen(EigenFilename, "a");
+                if (output_fp == NULL) {
+                    printf("\nCannot open file \"%s\"\n", EigenFilename);
+                    exit(EXIT_FAILURE);
+                }
+                for (Kcomm_indx = 0; Kcomm_indx < pSPARC->npkpt; Kcomm_indx++) {
+                    int Nk_Kcomm_indx = Nk_i[Kcomm_indx];
+                    for (k = 0; k < Nk_Kcomm_indx; k++) {
+                        int kred_index = kpt_displs[Kcomm_indx] / 3 + k + 1;
+                        for (i = 0; i < pSPARC->Nstates; i++) {
+                            fprintf(
+                                output_fp, "%7d%7d%  25.12E\n", i + 1,
+                                kred_index,
+                                eig_all[displs_all[Kcomm_indx] + k * Ns + i]);
                         }
                     }
                 }
-            }
-            if (pSPARC->spin_typ == 0) {
-
-                fclose(fp_eig);
-            } else {
-                fclose(fp_eig_up);
-                fclose(fp_eig_dn);
+                fclose(output_fp);
+            } else if (pSPARC->Nspin == 2) {
+                output_fp_up = fopen(EigenFilename_up, "a");
+                output_fp_dn = fopen(EigenFilename_dn, "a");
+                if (output_fp_up == NULL) {
+                    printf("\nCannot open file \"%s\"\n", EigenFilename_up);
+                    exit(EXIT_FAILURE);
+                }
+                if (output_fp_dn == NULL) {
+                    printf("\nCannot open file \"%s\"\n", EigenFilename_dn);
+                    exit(EXIT_FAILURE);
+                }
+                for (Kcomm_indx = 0; Kcomm_indx < pSPARC->npkpt; Kcomm_indx++) {
+                    int Nk_Kcomm_indx = Nk_i[Kcomm_indx];
+                    for (k = 0; k < Nk_Kcomm_indx; k++) {
+                        int kred_index = kpt_displs[Kcomm_indx] / 3 + k + 1;
+                        for (i = 0; i < pSPARC->Nstates; i++) {
+                            fprintf(
+                                output_fp_up, "%7d%7d     %25.12E \n", i + 1,
+                                kred_index,
+                                eig_all[displs_all[Kcomm_indx] + k * Ns + i]);
+                            fprintf(output_fp_dn, "%7d%7d     %25.12E \n",
+                                    i + 1, kred_index,
+                                    eig_all[displs_all[Kcomm_indx] +
+                                            (Nk_Kcomm_indx + k) * Ns + i]);
+                        }
+                    }
+                }
+                fclose(output_fp_up);
+                fclose(output_fp_dn);
             }
         }
     }
+
+    free(Nk_i);
+    free(kred_i);
+    free(kpt_displs);
+    free(displs_all);
+
+    if (pSPARC->npspin > 1) {
+        if (pSPARC->spincomm_index == 0) {
+            free(recvbuf_eig);
+        }
+    }
+
+    if (pSPARC->npkpt > 1 && pSPARC->spincomm_index == 0) {
+        if (pSPARC->kptcomm_index == 0) {
+            free(eig_all);
+        }
+    }
+    if (!rank)
+        printf("\nFinish writing eigenvalues ...\n");
 }
 
 void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
                    int *nncell, int num_bands,
                    double complex MMN_Matrix[][nntot][num_bands][num_bands]) {
+
     int rank;
     int size;
 
+    double complex *orbital_global = NULL;
+
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    if (!rank)
+        orbital_global = (double complex *)malloc(
+            pSPARC->Nd * pSPARC->Nstates * pSPARC->Nkpts_sym * pSPARC->Nspin *
+            pSPARC->Nspinor_eig * sizeof(double complex));
+
+    Collect_orbital(pSPARC, orbital_global);
+
+    // print all orbitals for DEBUG
 
     if (!rank)
         printf("\nStart calculating MMN ...\n");
@@ -599,78 +772,8 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
     double t1, t2;
     t1 = MPI_Wtime();
 #endif
+
     // calculate WANNIER MMN MATRIX
-
-    int spin = pSPARC->Nspinor;
-
-    int sendcounts = pSPARC->Nd_d_dmcomm * pSPARC->Nspin_spincomm *
-                     pSPARC->Nband_bandcomm * pSPARC->Nkpts_kptcomm;
-    int total_size = pSPARC->Nkpts_sym * spin * pSPARC->Nstates * pSPARC->Nd;
-
-    int *Nd_d_dmcomm;
-    int *Nspinor_spincomm;
-    int *Nband_bandcomm;
-    int *Nkpts_kptcomm;
-
-    int *dispos;
-    int *recvcounts;
-    double complex *Xorb_kpt_all;
-
-    if (!rank) {
-        Nd_d_dmcomm = (int *)malloc(size * sizeof(int));
-        Nspinor_spincomm = (int *)malloc(size * sizeof(int));
-        Nband_bandcomm = (int *)malloc(size * sizeof(int));
-        Nkpts_kptcomm = (int *)malloc(size * sizeof(int));
-        dispos = (int *)malloc(size * sizeof(int));
-        recvcounts = (int *)malloc(size * sizeof(int));
-        Xorb_kpt_all =
-            (double complex *)malloc(total_size * sizeof(double complex));
-    }
-
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    MPI_Gather(&(pSPARC->Nd_d_dmcomm), 1, MPI_INT, Nd_d_dmcomm, 1, MPI_INT, 0,
-               MPI_COMM_WORLD);
-
-    MPI_Gather(&(pSPARC->Nspinor_spincomm), 1, MPI_INT, Nspinor_spincomm, 1,
-               MPI_INT, 0, MPI_COMM_WORLD);
-
-    MPI_Gather(&(pSPARC->Nband_bandcomm), 1, MPI_INT, Nband_bandcomm, 1,
-               MPI_INT, 0, MPI_COMM_WORLD);
-
-    MPI_Gather(&(pSPARC->Nkpts_kptcomm), 1, MPI_INT, Nkpts_kptcomm, 1, MPI_INT,
-               0, MPI_COMM_WORLD);
-#ifdef DEBUG
-    if (!rank) {
-        for (int i = 0; i < size; i++) {
-            printf("rank %d: Nd_d_dmcomm = %d, Nspinor_spincomm = %d, "
-                   "Nband_bandcomm = %d, Nkpts_kptcomm = %d\n",
-                   i, Nd_d_dmcomm[i], Nspinor_spincomm[i], Nband_bandcomm[i],
-                   Nkpts_kptcomm[i]);
-        }
-    }
-#endif
-    if (!rank) {
-        dispos[0] = 0;
-        recvcounts[0] = Nd_d_dmcomm[0] * Nspinor_spincomm[0] *
-                        Nband_bandcomm[0] * Nkpts_kptcomm[0];
-        for (int i = 1; i < size; i++) {
-            dispos[i] = dispos[i - 1] +
-                        Nd_d_dmcomm[i - 1] * Nspinor_spincomm[i - 1] *
-                            Nband_bandcomm[i - 1] * Nkpts_kptcomm[i - 1];
-            recvcounts[i] = Nd_d_dmcomm[i] * Nspinor_spincomm[i] *
-                            Nband_bandcomm[i] * Nkpts_kptcomm[i];
-        }
-
-        for (int i = 0; i < size; i++) {
-            printf("rank = %d sidpos= %d, recvcounts = %d\n", i, dispos[i],
-                   recvcounts[i]);
-        }
-    }
-    MPI_Barrier(MPI_COMM_WORLD);
-    MPI_Gatherv(pSPARC->Xorb_kpt, sendcounts, MPI_DOUBLE_COMPLEX, Xorb_kpt_all,
-                recvcounts, dispos, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
-    MPI_Barrier(MPI_COMM_WORLD);
 
     if (!rank) {
 
@@ -698,51 +801,67 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
         a3_y = pSPARC->LatVec[7] * Lz;
         a3_z = pSPARC->LatVec[8] * Lz;
 
-        for (int kpt = 0; kpt < num_kpts; kpt++) {
-            for (int nn = 0; nn < nntot; nn++) {
+        for (int spin = 0; spin < pSPARC->Nspin; spin++) {
+            for (int kpt = 0; kpt < num_kpts; kpt++) {
+                for (int nn = 0; nn < nntot; nn++) {
 
-                int image_index = nnlist[kpt * nntot + nn] - 1;
+                    int image_index = nnlist[kpt * nntot + nn] - 1;
 
-                int n1 = nncell[0 * num_kpts * nntot + kpt * nntot + nn];
-                int n2 = nncell[1 * num_kpts * nntot + kpt * nntot + nn];
-                int n3 = nncell[2 * num_kpts * nntot + kpt * nntot + nn];
+                    int n1 = nncell[0 * num_kpts * nntot + kpt * nntot + nn];
+                    int n2 = nncell[1 * num_kpts * nntot + kpt * nntot + nn];
+                    int n3 = nncell[2 * num_kpts * nntot + kpt * nntot + nn];
 
-                double bx = pSPARC->k1[image_index] - pSPARC->k1[kpt];
-                double by = pSPARC->k2[image_index] - pSPARC->k2[kpt];
-                double bz = pSPARC->k3[image_index] - pSPARC->k3[kpt];
+                    double bx = pSPARC->k1[image_index] - pSPARC->k1[kpt];
+                    double by = pSPARC->k2[image_index] - pSPARC->k2[kpt];
+                    double bz = pSPARC->k3[image_index] - pSPARC->k3[kpt];
 
-                double phi = bx * (n1 * a1_x + n2 * a2_x + n3 * a3_x) +
-                             by * (n1 * a1_y + n2 * a2_y + n3 * a3_y) +
-                             bz * (n1 * a1_z + n2 * a2_z + n3 * a3_z);
+                    double phi = bx * (n1 * a1_x + n2 * a2_x + n3 * a3_x) +
+                                 by * (n1 * a1_y + n2 * a2_y + n3 * a3_y) +
+                                 bz * (n1 * a1_z + n2 * a2_z + n3 * a3_z);
 
-                // double complex psi = cos(phi) + I * sin(phi);
+                    double complex psi = cos(phi) + I * sin(phi);
 
-                for (int m = 0; m < num_bands; m++) {
-                    for (int n = 0; n < num_bands; n++) {
-                        for (int s = 0; s < spin; s++) {
-                            // MMN matrix element between band m and n at
-                            // kpt and image_index
-                            double complex mmn_element = 0.0 + 0.0 * I;
-                            for (int i = 0; i < pSPARC->Nd; i++) {
-                                // pSPARC->Xorb_kpt[];
-                                mmn_element +=
-                                    conj(Xorb_kpt_all[kpt * pSPARC->Nd *
-                                                          pSPARC->Nspinor *
-                                                          pSPARC->Nstates +
-                                                      m * pSPARC->Nd *
-                                                          pSPARC->Nspinor +
-                                                      s * pSPARC->Nd + i]) *
-                                    (sin(phi) - I * cos(phi)) *
-                                    Xorb_kpt_all[image_index * pSPARC->Nd *
-                                                     pSPARC->Nspinor *
-                                                     pSPARC->Nstates +
-                                                 n * pSPARC->Nd *
-                                                     pSPARC->Nspinor +
-                                                 s * pSPARC->Nd + i];
+                    for (int m = 0; m < num_bands; m++) {
+                        for (int n = 0; n < num_bands; n++) {
+                            for (int s = 0; s < pSPARC->Nspinor_eig; s++) {
+                                // MMN matrix element between band m and n at
+                                // kpt and image_index
+                                double complex mmn_element = 0.0 + 0.0 * I;
+                                for (int i = 0; i < pSPARC->Nd; i++) {
+                                    // pSPARC->Xorb_kpt[];
+                                    mmn_element +=
+                                        conj(
+                                            orbital_global
+                                                [kpt * pSPARC->Nstates *
+                                                     pSPARC->Nspin *
+                                                     pSPARC->Nd *
+                                                     pSPARC->Nspinor_eig +
+                                                 spin * pSPARC->Nstates *
+                                                     pSPARC->Nd *
+                                                     pSPARC->Nspinor_eig +
+                                                 m * pSPARC->Nd *
+                                                     pSPARC->Nspinor_eig +
+                                                 i * pSPARC->Nspinor_eig + s]) *
+                                        (cos(phi) + I * sin(phi)) *
+                                        orbital_global[kpt * pSPARC->Nstates *
+                                                           pSPARC->Nspin *
+                                                           pSPARC->Nd *
+                                                           pSPARC->Nspinor_eig +
+                                                       spin * pSPARC->Nstates *
+                                                           pSPARC->Nd *
+                                                           pSPARC->Nspinor_eig +
+                                                       n * pSPARC->Nd *
+                                                           pSPARC->Nspinor_eig +
+                                                       i * pSPARC->Nspinor_eig +
+                                                       s];
+                                }
+                                mmn_element *= pSPARC->dV;
+                                // mmn_element /= pSPARC->Nd; // Normalize
+                                MMN_Matrix[spin * pSPARC->Nkpts_sym *
+                                               pSPARC->Nspinor_eig +
+                                           kpt * pSPARC->Nspinor_eig +
+                                           s][nn][m][n] = mmn_element;
                             }
-                            // mmn_element /= pSPARC->Nd; // Normalize
-                            MMN_Matrix[s * pSPARC->Nkpts + kpt][nn][m][n] =
-                                mmn_element;
                         }
                     }
                 }
@@ -782,4 +901,366 @@ void Calculate_AMN(SPARC_OBJ *pSPARC) {
     if (!rank)
         printf("\nTime for calculating AMN: %.3f ms\n", (t2 - t1) * 1e3);
 #endif
+}
+
+void Collect_orbital(SPARC_OBJ *pSPARC, double complex *orbital_global) {
+
+    int gridsizes[3], rank, tag, orbital_flag = 0, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    int flag = pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 ||
+               pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL;
+    MPI_Comm alldmcomm;
+    int color = (flag == 1) ? MPI_UNDEFINED : 1;
+    MPI_Comm_split(MPI_COMM_WORLD, color, rank, &alldmcomm);
+    if (flag)
+        return;
+
+    gridsizes[0] = pSPARC->Nx;
+    gridsizes[1] = pSPARC->Ny;
+    gridsizes[2] = pSPARC->Nz;
+    int Nd = pSPARC->Nd;
+
+    double dx = pSPARC->delta_x;
+    double dy = pSPARC->delta_y;
+    double dz = pSPARC->delta_z;
+    double dV = pSPARC->dV;
+
+    int DMnd = pSPARC->Nd_d_dmcomm;
+    int DMndsp = DMnd * pSPARC->Nspinor_spincomm;
+    int size_k = DMndsp * pSPARC->Nband_bandcomm;
+
+    int kpt_start = 0;
+    int kpt_end = pSPARC->Nkpts_sym - 1;
+    int band_start = 0;
+    int band_end = pSPARC->Nstates - 1;
+    int spin_start = 0;
+    int spin_end = pSPARC->Nspin - 1;
+
+    double complex *orbital_single = NULL;
+
+    orbital_single = (double complex *)malloc(Nd * pSPARC->Nspinor_eig *
+                                              sizeof(double complex));
+
+    for (int kpt = kpt_start; kpt <= kpt_end; kpt++) {
+        int kpt_flag =
+            (pSPARC->kpt_start_indx <= kpt && kpt <= pSPARC->kpt_end_indx);
+        int kpt_shift = kpt - pSPARC->kpt_start_indx;
+
+        for (int band = band_start; band <= band_end; band++) {
+            int band_flag = (pSPARC->band_start_indx <= band &&
+                             band <= pSPARC->band_end_indx);
+            int band_shift = band - pSPARC->band_start_indx;
+
+            for (int spin = spin_start; spin <= spin_end; spin++) {
+                int spin_flag = (pSPARC->spin_start_indx <= spin &&
+                                 spin <= pSPARC->spin_end_indx);
+                int spin_shift = spin - pSPARC->spin_start_indx;
+
+                tag = kpt * pSPARC->Nstates * pSPARC->Nspin +
+                      band * pSPARC->Nspin + spin;
+                int rank_comm;
+                MPI_Comm_rank(pSPARC->dmcomm, &rank_comm);
+
+                if (kpt_flag && band_flag && spin_flag) {
+
+                    if (pSPARC->isGammaPoint) {
+                        Collect_orbital_real(
+                            pSPARC,
+                            pSPARC->Xorb + band_shift * DMndsp +
+                                kpt_shift * size_k + spin_shift * DMnd,
+                            gridsizes, pSPARC->DMVertices_dmcomm, pSPARC->dV,
+                            pSPARC->Nspinor_eig, spin, kpt, band,
+                            pSPARC->dmcomm, orbital_single);
+                    } else {
+                        Collect_orbital_complex(
+                            pSPARC,
+                            pSPARC->Xorb_kpt + band_shift * DMndsp +
+                                kpt_shift * size_k + spin_shift * DMnd,
+                            gridsizes, pSPARC->DMVertices_dmcomm, pSPARC->dV,
+                            pSPARC->Nspinor_eig, spin, kpt, band,
+                            pSPARC->dmcomm, orbital_single);
+                    }
+
+                    if (rank_comm == 0) {
+                        if (rank == 0) {
+                            memcpy(orbital_global +
+                                       kpt * pSPARC->Nstates * pSPARC->Nspin *
+                                           Nd * pSPARC->Nspinor_eig +
+                                       spin * pSPARC->Nstates * Nd *
+                                           pSPARC->Nspinor_eig +
+                                       band * Nd * pSPARC->Nspinor_eig,
+                                   orbital_single,
+                                   sizeof(double complex) *
+                                       (Nd * pSPARC->Nspinor_eig));
+                        } else {
+                            MPI_Send(orbital_single, Nd * pSPARC->Nspinor_eig,
+                                     MPI_DOUBLE_COMPLEX, 0, tag, alldmcomm);
+                        }
+                    }
+                }
+                if (rank == 0) {
+                    if (rank_comm == 0) {
+                        if (!kpt_flag || !band_flag || !spin_flag) {
+                            MPI_Recv(orbital_global +
+                                         kpt * pSPARC->Nstates * pSPARC->Nspin *
+                                             Nd * pSPARC->Nspinor_eig +
+                                         spin * pSPARC->Nstates * Nd *
+                                             pSPARC->Nspinor_eig +
+                                         band * Nd * pSPARC->Nspinor_eig,
+                                     Nd * pSPARC->Nspinor_eig,
+                                     MPI_DOUBLE_COMPLEX, MPI_ANY_SOURCE, tag,
+
+                                     alldmcomm, MPI_STATUS_IGNORE);
+                        }
+                    }
+                }
+                MPI_Barrier(alldmcomm);
+            }
+        }
+    }
+
+    // gather all orbital_single to rank 0 of global comm
+    if (rank == 0) {
+        for (int kpt = 9; kpt < pSPARC->kpt_end_indx; kpt++) {
+            int kpt_shift = kpt - pSPARC->kpt_start_indx;
+            int kpt_flag =
+                kpt <= pSPARC->kpt_start_indx && kpt >= pSPARC->kpt_end_indx;
+
+            for (int band = pSPARC->band_start_indx;
+                 band <= pSPARC->band_end_indx; band++) {
+                int band_shift = band - pSPARC->band_start_indx;
+                int band_flag = band <= pSPARC->band_start_indx &&
+                                band >= pSPARC->band_end_indx;
+
+                for (int spin = pSPARC->spin_start_indx;
+                     spin <= pSPARC->spin_end_indx; spin++) {
+                    int spin_shift = spin - pSPARC->spin_start_indx;
+                    int spin_flag = spin <= pSPARC->spin_start_indx &&
+                                    spin >= pSPARC->spin_end_indx;
+
+                    int tag = kpt * pSPARC->Nstates * pSPARC->Nspin +
+                              band * pSPARC->Nspin + spin;
+
+                    int rank_comm;
+                    MPI_Comm_rank(pSPARC->dmcomm, &rank_comm);
+                    if (spin_flag && band_flag && kpt_flag) {
+                        MPI_Recv(orbital_global +
+                                     kpt * pSPARC->Nstates * pSPARC->Nspin *
+                                         Nd * pSPARC->Nspinor_eig +
+                                     spin * pSPARC->Nstates * Nd *
+                                         pSPARC->Nspinor_eig +
+                                     band * Nd * pSPARC->Nspinor_eig,
+                                 Nd * pSPARC->Nspinor_eig, MPI_DOUBLE_COMPLEX,
+                                 MPI_ANY_SOURCE, tag, alldmcomm,
+                                 MPI_STATUS_IGNORE);
+                    } else {
+                        memcpy(orbital_global +
+                                   kpt * pSPARC->Nstates * pSPARC->Nspin * Nd *
+                                       pSPARC->Nspinor_eig +
+                                   spin * pSPARC->Nstates * Nd *
+                                       pSPARC->Nspinor_eig +
+                                   band * Nd * pSPARC->Nspinor_eig,
+                               orbital_single + kpt_shift * band_shift *
+                                                    spin_shift *
+                                                    (Nd * pSPARC->Nspinor_eig),
+                               sizeof(double complex) *
+                                   (Nd * pSPARC->Nspinor_eig));
+                    }
+                }
+            }
+        }
+    }
+
+    // print each rank kpt band spin size
+    free(orbital_single);
+    MPI_Comm_free(&alldmcomm);
+}
+
+void Collect_orbital_real(SPARC_OBJ *pSPARC, double *x, int *gridsizes,
+                          int *DMVertices, double dV, int Nspinor_eig,
+                          int spin_index, int kpt_index, int band_index,
+                          MPI_Comm comm, double complex *orbital_single) {
+    if (comm == MPI_COMM_NULL)
+        return;
+
+    int nproc_comm, rank_comm;
+    MPI_Comm_size(comm, &nproc_comm);
+    MPI_Comm_rank(comm, &rank_comm);
+
+    // global size of the vector
+    int Nx = gridsizes[0];
+    int Ny = gridsizes[1];
+    int Nz = gridsizes[2];
+    int Nd = Nx * Ny * Nz;
+    double complex *x_global = NULL;
+    double *x_double = NULL;
+
+    if (rank_comm == 0) {
+        x_global =
+            (double complex *)malloc(Nd * Nspinor_eig * sizeof(double complex));
+        x_double = (double *)malloc(Nd * Nspinor_eig * sizeof(double));
+    }
+
+    int DMnx = DMVertices[1] - DMVertices[0] + 1;
+    int DMny = DMVertices[3] - DMVertices[2] + 1;
+    int DMnz = DMVertices[5] - DMVertices[4] + 1;
+    int DMnd = DMnx * DMny * DMnz;
+
+    if (nproc_comm >
+        1) { // if there's more than one process, need to collect x first
+        int sdims[3], periods[3], my_coords[3];
+        MPI_Cart_get(comm, 3, sdims, periods, my_coords);
+
+        /* use DD2DD to collect distributed data */
+        // create a cartesian topology on one process (rank 0)
+        int rdims[3] = {1, 1, 1}, rDMVert[6];
+        MPI_Comm recv_comm;
+        if (rank_comm) {
+            recv_comm = MPI_COMM_NULL;
+        } else {
+            int rperiods[3] = {1, 1, 1};
+            // create a cartesian topology on one process (rank 0)
+            MPI_Cart_create(MPI_COMM_SELF, 3, rdims, rperiods, 0, &recv_comm);
+        }
+
+        D2D_OBJ d2d_sender, d2d_recvr;
+        rDMVert[0] = 0;
+        rDMVert[1] = Nx - 1;
+        rDMVert[2] = 0;
+        rDMVert[3] = Ny - 1;
+        rDMVert[4] = 0;
+        rDMVert[5] = Nz - 1;
+
+        // set up D2D targets, note that this is time consuming if
+        // number of processes is large (> 1000), in that case, do
+        // this step only once and keep the d2d target objects
+        Set_D2D_Target(&d2d_sender, &d2d_recvr, gridsizes, DMVertices, rDMVert,
+                       comm, sdims, recv_comm, rdims, comm);
+
+        // collect vector to one process
+        for (int spinor = 0; spinor < Nspinor_eig; spinor++) {
+            D2D(&d2d_sender, &d2d_recvr, gridsizes, DMVertices,
+                x + DMnd * spinor, rDMVert, x_double + Nd * spinor, comm, sdims,
+                recv_comm, rdims, comm, sizeof(double));
+        }
+
+        // free D2D targets
+        Free_D2D_Target(&d2d_sender, &d2d_recvr, comm, recv_comm);
+
+        if (!rank_comm)
+            MPI_Comm_free(&recv_comm);
+    } else {
+        memcpy(x_double, x, sizeof(double) * Nd * Nspinor_eig);
+    }
+
+    // convert double to double complex
+    for (int i = 0; i < Nd * Nspinor_eig; i++) {
+        x_global[i] = x_double[i] + 0.0 * I;
+    }
+    free(x_double);
+
+    if (rank_comm == 0) {
+        // scale psi to make it L2-norm = 1
+        for (int i = 0; i < Nd * Nspinor_eig; i++)
+            x_global[i] /= sqrt(dV);
+        memcpy(orbital_single, x_global,
+               sizeof(double complex) * Nd * Nspinor_eig);
+    }
+
+    // free the collected data after printing to file
+    if (rank_comm == 0) {
+        free(x_global);
+    }
+}
+
+void Collect_orbital_complex(SPARC_OBJ *pSPARC, double complex *x,
+                             int *gridsizes, int *DMVertices, double dV,
+                             int Nspinor_eig, int spin_index, int kpt_index,
+                             int band_index, MPI_Comm comm,
+                             double complex *orbital_single) {
+    if (comm == MPI_COMM_NULL)
+        return;
+
+    int nproc_comm, rank_comm;
+    MPI_Comm_size(comm, &nproc_comm);
+    MPI_Comm_rank(comm, &rank_comm);
+
+    // global size of the vector
+    int Nx = gridsizes[0];
+    int Ny = gridsizes[1];
+    int Nz = gridsizes[2];
+    int Nd = Nx * Ny * Nz;
+    double complex *x_global = NULL;
+    double *x_double = NULL;
+
+    if (rank_comm == 0) {
+        x_global =
+            (double complex *)malloc(Nd * Nspinor_eig * sizeof(double complex));
+    }
+
+    int DMnx = DMVertices[1] - DMVertices[0] + 1;
+    int DMny = DMVertices[3] - DMVertices[2] + 1;
+    int DMnz = DMVertices[5] - DMVertices[4] + 1;
+    int DMnd = DMnx * DMny * DMnz;
+
+    if (nproc_comm >
+        1) { // if there's more than one process, need to collect x first
+        int sdims[3], periods[3], my_coords[3];
+        MPI_Cart_get(comm, 3, sdims, periods, my_coords);
+
+        /* use DD2DD to collect distributed data */
+        // create a cartesian topology on one process (rank 0)
+        int rdims[3] = {1, 1, 1}, rDMVert[6];
+        MPI_Comm recv_comm;
+        if (rank_comm) {
+            recv_comm = MPI_COMM_NULL;
+        } else {
+            int rperiods[3] = {1, 1, 1};
+            // create a cartesian topology on one process (rank 0)
+            MPI_Cart_create(MPI_COMM_SELF, 3, rdims, rperiods, 0, &recv_comm);
+        }
+
+        D2D_OBJ d2d_sender, d2d_recvr;
+        rDMVert[0] = 0;
+        rDMVert[1] = Nx - 1;
+        rDMVert[2] = 0;
+        rDMVert[3] = Ny - 1;
+        rDMVert[4] = 0;
+        rDMVert[5] = Nz - 1;
+
+        // set up D2D targets, note that this is time consuming if
+        // number of processes is large (> 1000), in that case, do
+        // this step only once and keep the d2d target objects
+        Set_D2D_Target(&d2d_sender, &d2d_recvr, gridsizes, DMVertices, rDMVert,
+                       comm, sdims, recv_comm, rdims, comm);
+
+        // collect vector to one process
+        for (int spinor = 0; spinor < Nspinor_eig; spinor++) {
+            D2D(&d2d_sender, &d2d_recvr, gridsizes, DMVertices,
+                x + DMnd * spinor, rDMVert, x_global + Nd * spinor, comm, sdims,
+                recv_comm, rdims, comm, sizeof(double _Complex));
+        }
+
+        // free D2D targets
+        Free_D2D_Target(&d2d_sender, &d2d_recvr, comm, recv_comm);
+
+        if (!rank_comm)
+            MPI_Comm_free(&recv_comm);
+    } else {
+        memcpy(x_global, x, sizeof(double complex) * Nd * Nspinor_eig);
+    }
+
+    if (rank_comm == 0) {
+        // scale psi to make it L2-norm = 1
+        for (int i = 0; i < Nd * Nspinor_eig; i++)
+            x_global[i] /= sqrt(dV);
+        memcpy(orbital_single, x_global,
+               sizeof(double complex) * Nd * Nspinor_eig);
+    }
+
+    // free the collected data after printing to file
+    if (rank_comm == 0) {
+        free(x_global);
+    }
 }

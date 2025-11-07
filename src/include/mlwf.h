@@ -3,6 +3,7 @@
 #endif
 
 #include "isddft.h"
+#include <mpi.h>
 
 void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC);
 
@@ -42,3 +43,13 @@ void Write_EIG(SPARC_OBJ *pSPARC);
 void Calculate_AMN(SPARC_OBJ *pSPARC);
 
 void Get_All_Cart_Coord(SPARC_OBJ *pSPARC);
+
+void Collect_orbital(SPARC_OBJ *pSPARC, double complex *orbital_global);
+
+void Collect_orbital_real(SPARC_OBJ *pSPARC, double *x, int *gridsizes, int *DMVertices,
+                            double dV, int Nspinor, int spin_index,
+                            int kpt_index, int band_index, MPI_Comm comm, double complex *orbital_single);
+
+void Collect_orbital_complex(SPARC_OBJ *pSPARC, double complex *x, int *gridsizes, int *DMVertices,
+                            double dV, int Nspinor, int spin_index,
+                            int kpt_index, int band_index, MPI_Comm comm, double complex *orbital_single);
