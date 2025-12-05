@@ -183,24 +183,24 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
 
     for (int i = 0; i < num_atoms; i++) {
         if (pSPARC->IsFrac[i] == 1) {
-            atoms_cart[3 * i] = pSPARC->atom_pos[3 * i] * a1[0] +
-                                pSPARC->atom_pos[3 * i + 1] * a2[0] +
-                                pSPARC->atom_pos[3 * i + 2] * a3[0];
-            atoms_cart[3 * i + 1] = pSPARC->atom_pos[3 * i] * a1[1] +
+            atoms_cart[3 * i + 0] = pSPARC->atom_pos[3 * i + 0] * a1[0] +
+                                    pSPARC->atom_pos[3 * i + 1] * a2[0] +
+                                    pSPARC->atom_pos[3 * i + 2] * a3[0];
+            atoms_cart[3 * i + 1] = pSPARC->atom_pos[3 * i + 0] * a1[1] +
                                     pSPARC->atom_pos[3 * i + 1] * a2[1] +
                                     pSPARC->atom_pos[3 * i + 2] * a3[1];
-            atoms_cart[3 * i + 2] = pSPARC->atom_pos[3 * i] * a1[2] +
+            atoms_cart[3 * i + 2] = pSPARC->atom_pos[3 * i + 0] * a1[2] +
                                     pSPARC->atom_pos[3 * i + 1] * a2[2] +
                                     pSPARC->atom_pos[3 * i + 2] * a3[2];
         } else {
-            atoms_cart[3 * i] = pSPARC->atom_pos[3 * i] * CONST_BOHR;
+            atoms_cart[3 * i + 0] = pSPARC->atom_pos[3 * i + 0] * CONST_BOHR;
             atoms_cart[3 * i + 1] = pSPARC->atom_pos[3 * i + 1] * CONST_BOHR;
             atoms_cart[3 * i + 2] = pSPARC->atom_pos[3 * i + 2] * CONST_BOHR;
         }
     }
 
     for (int i = 0; i < num_kpts; i++) {
-        kpt_latt[i * 3] = pSPARC->k1_fc[i];
+        kpt_latt[i * 3 + 0] = pSPARC->k1_fc[i];
         kpt_latt[i * 3 + 1] = pSPARC->k2_fc[i];
         kpt_latt[i * 3 + 2] = pSPARC->k3_fc[i];
     }
@@ -208,7 +208,7 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
 #ifdef DEBUG
     if (!rank) {
         t2 = MPI_Wtime();
-        printf("\nTime for convert unit: %.3f ms\n", (t2 - t1) * 1e3);
+        printf("\nTime for convert unit: %.3f s\n", t2 - t1);
 
         printf("atoms_cart: \n");
         for (int i = 0; i < 3 * num_atoms; i++) {
@@ -302,7 +302,7 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
     if (!rank) {
         t1 = t2;
         t2 = MPI_Wtime();
-        printf("\nTime for wannier_setup_: %.3f ms\n", (t2 - t1) * 1e3);
+        printf("\nTime for wannier_setup_: %.3f s\n", t2 - t1);
         // print wannier outputs
         printf("nntot: %5d\n", nntot);
         printf("nnlist:\n");
@@ -313,8 +313,8 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
             printf("\n");
         }
         printf("nncell:\n");
-        for (int kpt = 0; kpt < num_kpts; kpt++) {
-            for (int nn = 0; nn < nntot; nn++) {
+        for (int nn = 0; nn < nntot; nn++) {
+            for (int kpt = 0; kpt < num_kpts; kpt++) {
                 for (int i = 0; i < 3; i++) {
                     printf("%5d", nncell[nn * num_kpts * 3 + kpt * 3 + i]);
                 }
@@ -346,13 +346,13 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
         printf("\n");
         printf("proj_z:\n");
         for (int i = 0; i < num_bands; i++) {
-            printf("  %13.8f%13.8f%13.8f\n", proj_z[3 * i], proj_z[3 * i + 1],
+            printf("  %13.8f %13.8f %13.8f\n", proj_z[3 * i], proj_z[3 * i + 1],
                    proj_z[3 * i + 2]);
         }
         printf("\n");
         printf("proj_x:\n");
         for (int i = 0; i < num_bands; i++) {
-            printf("  %13.8f%13.8f%13.8f\n", proj_x[3 * i], proj_x[3 * i + 1],
+            printf("  %13.8f %13.8f %13.8f\n", proj_x[3 * i], proj_x[3 * i + 1],
                    proj_x[3 * i + 2]);
         }
         printf("\n");
@@ -381,8 +381,10 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    double complex MMN_Matrix[num_kpts * pSPARC->Nspinor_eig * pSPARC->Nspin]
-                             [nntot][num_bands][num_bands];
+    size_t mmn_size = num_kpts * pSPARC->Nspinor_eig * pSPARC->Nspin * nntot *
+                      num_bands * num_bands;
+    double complex *MMN_Matrix =
+        (double complex *)calloc(mmn_size, sizeof(double complex));
 
     size_t amn_size =
         pSPARC->Nspin * pSPARC->Nspinor_eig * num_kpts * num_bands * num_wann;
@@ -439,6 +441,7 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
             for (int kpt = 0; kpt < num_kpts; kpt++) {
                 for (int nn = 0; nn < nntot; nn++) {
                     int image_index = nnlist[nn * num_kpts + kpt];
+
                     int n1 = nncell[nn * num_kpts * 3 + kpt * 3 + 0];
                     int n2 = nncell[nn * num_kpts * 3 + kpt * 3 + 1];
                     int n3 = nncell[nn * num_kpts * 3 + kpt * 3 + 2];
@@ -454,7 +457,9 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
                     for (int m = 0; m < num_bands; m++) {
                         for (int n = 0; n < num_bands; n++) {
                             double complex mmn_element =
-                                MMN_Matrix[kpt][nn][m][n];
+                                MMN_Matrix[kpt * nntot * num_bands * num_bands +
+                                           nn * num_bands * num_bands +
+                                           m * num_bands + n];
 
                             if (pSPARC->spin_typ == 0)
                                 fprintf(fp_mmn, "%18.12f %18.12f\n",
@@ -464,12 +469,15 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
                                      spin++) {
                                     for (int s = 0; s < pSPARC->Nspinor_eig;
                                          s++) {
-                                        mmn_element =
-                                            MMN_Matrix[spin * pSPARC->Nkpts *
-                                                           pSPARC->Nspinor_eig +
-                                                       kpt *
-                                                           pSPARC->Nspinor_eig +
-                                                       s][nn][m][n];
+                                        mmn_element = MMN_Matrix
+                                            [spin * pSPARC->Nkpts *
+                                                 pSPARC->Nspinor_eig * nntot *
+                                                 num_bands * num_bands +
+                                             kpt * pSPARC->Nspinor_eig * nntot *
+                                                 num_bands * num_bands +
+                                             s * nntot * num_bands * num_bands +
+                                             nn * num_bands * num_bands +
+                                             m * num_bands + n];
                                         if (spin == 0 && s == 0) {
                                             fprintf(fp_mmn_up,
                                                     "%18.12f %18.12f\n",
@@ -529,22 +537,20 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
             for (int kpt = 0; kpt < num_kpts; kpt++) {
                 for (int iw = 0; iw < num_wann; iw++) {
                     for (int band = 0; band < num_bands; band++) {
-
-                        if (pSPARC->spin_typ == 0) {
-                            double complex amn_element =
-                                AMN_Matrix[kpt * num_bands * num_wann +
-                                           band * num_wann + iw];
-                            fprintf(fp_amn, "%5d %5d %5d %18.12f %18.12f\n",
-                                    band + 1, iw + 1, kpt + 1,
-                                    creal(amn_element), cimag(amn_element));
-                        } else {
-                            for (int spin = 0; spin < pSPARC->Nspin; spin++) {
-                                for (int s = 0; s < pSPARC->Nspinor_eig; s++) {
-                                    double complex amn_element =
-                                        AMN_Matrix[(spin + s) * num_kpts *
-                                                       num_bands * num_wann +
-                                                   kpt * num_bands * num_wann +
-                                                   band * num_wann + iw];
+                        double complex amn_element = 0.0 + 0.0 * I;
+                        for (int spin = 0; spin < pSPARC->Nspin; spin++) {
+                            for (int s = 0; s < pSPARC->Nspinor_eig; s++) {
+                                amn_element =
+                                    AMN_Matrix[(spin + s) * num_kpts *
+                                                   num_bands * num_wann +
+                                               kpt * num_bands * num_wann +
+                                               band * num_wann + iw];
+                                if (pSPARC->spin_typ == 0) {
+                                    fprintf(
+                                        fp_amn, "%5d %5d %5d %18.12f %18.12f\n",
+                                        band + 1, iw + 1, kpt + 1,
+                                        creal(amn_element), cimag(amn_element));
+                                } else {
                                     if (spin == 0 && s == 0) {
                                         fprintf(fp_amn_up,
                                                 "%5d %5d %5d %18.12f %18.12f\n",
@@ -573,12 +579,13 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
             }
         }
     }
+    free(MMN_Matrix);
+    free(AMN_Matrix);
 
 #ifdef DEBUG
     t2 = MPI_Wtime();
     if (!rank)
-        printf("\nTime for generate wannier inputs: %.3f ms\n",
-               (t2 - t1) * 1e3);
+        printf("\nTime for generate wannier inputs: %.3f s\n", t2 - t1);
 #endif
     if (!rank)
         printf("Finish generating wannier inputs ...\n");
@@ -614,33 +621,33 @@ void Write_EIG(SPARC_OBJ *pSPARC) {
         snprintf(EigenFilename_dn, L_STRING, "%s_dn.eig", pSPARC->filename);
     }
 
-    FILE *output_fp;
-    FILE *output_fp_up;
-    FILE *output_fp_dn;
+    FILE *Eigen_fp;
+    FILE *Eigen_fp_up;
+    FILE *Eigen_fp_dn;
     // first create an empty file
     if (rank == 0) {
         if (pSPARC->Nspin == 1) {
-            output_fp = fopen(EigenFilename, "w");
+            Eigen_fp = fopen(EigenFilename, "w");
 
-            if (output_fp == NULL) {
+            if (Eigen_fp == NULL) {
                 printf("\nCannot open file \"%s\"\n", EigenFilename);
                 exit(EXIT_FAILURE);
             }
-            fclose(output_fp);
+            fclose(Eigen_fp);
         } else {
-            output_fp_up = fopen(EigenFilename_up, "w");
-            output_fp_dn = fopen(EigenFilename_dn, "w");
+            Eigen_fp_up = fopen(EigenFilename_up, "w");
+            Eigen_fp_dn = fopen(EigenFilename_dn, "w");
 
-            if (output_fp_up == NULL) {
+            if (Eigen_fp_up == NULL) {
                 printf("\nCannot open file \"%s\"\n", EigenFilename_up);
                 exit(EXIT_FAILURE);
             }
-            if (output_fp_dn == NULL) {
+            if (Eigen_fp_dn == NULL) {
                 printf("\nCannot open file \"%s\"\n", EigenFilename_dn);
                 exit(EXIT_FAILURE);
             }
-            fclose(output_fp_up);
-            fclose(output_fp_dn);
+            fclose(Eigen_fp_up);
+            fclose(Eigen_fp_dn);
         }
     }
 
@@ -760,55 +767,55 @@ void Write_EIG(SPARC_OBJ *pSPARC) {
     if (pSPARC->spincomm_index == 0) {
         if (pSPARC->kptcomm_index == 0) {
             // write to .eig file
-            int k, Kcomm_indx, i;
+            int kpt, Kcomm_indx, band;
             if (pSPARC->Nspin == 1) {
-                output_fp = fopen(EigenFilename, "a");
-                if (output_fp == NULL) {
+                Eigen_fp = fopen(EigenFilename, "a");
+                if (Eigen_fp == NULL) {
                     printf("\nCannot open file \"%s\"\n", EigenFilename);
                     exit(EXIT_FAILURE);
                 }
                 for (Kcomm_indx = 0; Kcomm_indx < pSPARC->npkpt; Kcomm_indx++) {
                     int Nk_Kcomm_indx = Nk_i[Kcomm_indx];
-                    for (k = 0; k < Nk_Kcomm_indx; k++) {
-                        int kred_index = kpt_displs[Kcomm_indx] / 3 + k + 1;
-                        for (i = 0; i < pSPARC->Nstates; i++) {
-                            fprintf(
-                                output_fp, "%7d%7d%  25.12E\n", i + 1,
-                                kred_index,
-                                eig_all[displs_all[Kcomm_indx] + k * Ns + i]);
+                    for (kpt = 0; kpt < Nk_Kcomm_indx; kpt++) {
+                        int kred_index = kpt_displs[Kcomm_indx] / 3 + kpt + 1;
+                        for (band = 0; band < pSPARC->Nstates; band++) {
+                            fprintf(Eigen_fp, "%10d %10d %25.12f\n", band + 1,
+                                    kred_index,
+                                    eig_all[displs_all[Kcomm_indx] + kpt * Ns +
+                                            band]);
                         }
                     }
                 }
-                fclose(output_fp);
+                fclose(Eigen_fp);
             } else if (pSPARC->Nspin == 2) {
-                output_fp_up = fopen(EigenFilename_up, "a");
-                output_fp_dn = fopen(EigenFilename_dn, "a");
-                if (output_fp_up == NULL) {
+                Eigen_fp_up = fopen(EigenFilename_up, "a");
+                Eigen_fp_dn = fopen(EigenFilename_dn, "a");
+                if (Eigen_fp_up == NULL) {
                     printf("\nCannot open file \"%s\"\n", EigenFilename_up);
                     exit(EXIT_FAILURE);
                 }
-                if (output_fp_dn == NULL) {
+                if (Eigen_fp_dn == NULL) {
                     printf("\nCannot open file \"%s\"\n", EigenFilename_dn);
                     exit(EXIT_FAILURE);
                 }
                 for (Kcomm_indx = 0; Kcomm_indx < pSPARC->npkpt; Kcomm_indx++) {
                     int Nk_Kcomm_indx = Nk_i[Kcomm_indx];
-                    for (k = 0; k < Nk_Kcomm_indx; k++) {
-                        int kred_index = kpt_displs[Kcomm_indx] / 3 + k + 1;
-                        for (i = 0; i < pSPARC->Nstates; i++) {
-                            fprintf(
-                                output_fp_up, "%7d%7d     %25.12E \n", i + 1,
-                                kred_index,
-                                eig_all[displs_all[Kcomm_indx] + k * Ns + i]);
-                            fprintf(output_fp_dn, "%7d%7d     %25.12E \n",
-                                    i + 1, kred_index,
+                    for (kpt = 0; kpt < Nk_Kcomm_indx; kpt++) {
+                        int kred_index = kpt_displs[Kcomm_indx] / 3 + kpt + 1;
+                        for (band = 0; band < pSPARC->Nstates; band++) {
+                            fprintf(Eigen_fp_up, "%10d %10d     %25.12f\n",
+                                    band + 1, kred_index,
+                                    eig_all[displs_all[Kcomm_indx] + kpt * Ns +
+                                            band]);
+                            fprintf(Eigen_fp_dn, "%10d %10d     %25.12f\n",
+                                    band + 1, kred_index,
                                     eig_all[displs_all[Kcomm_indx] +
-                                            (Nk_Kcomm_indx + k) * Ns + i]);
+                                            (Nk_Kcomm_indx + kpt) * Ns + band]);
                         }
                     }
                 }
-                fclose(output_fp_up);
-                fclose(output_fp_dn);
+                fclose(Eigen_fp_up);
+                fclose(Eigen_fp_dn);
             }
         }
     }
@@ -834,8 +841,7 @@ void Write_EIG(SPARC_OBJ *pSPARC) {
 }
 
 void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
-                   int *nncell, int num_bands,
-                   double complex MMN_Matrix[][nntot][num_bands][num_bands]) {
+                   int *nncell, int num_bands, double complex *MMN_Matrix) {
 
     int rank;
     int size;
@@ -914,26 +920,28 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
 
         for (int spin = 0; spin < pSPARC->Nspin; spin++) {
             for (int kpt = 0; kpt < num_kpts; kpt++) {
+
                 double kcart[3] = {
-                    pSPARC->k1[kpt] * b1[0] + pSPARC->k2[kpt] * b2[0] +
-                        pSPARC->k3[kpt] * b3[0],
-                    pSPARC->k1[kpt] * b1[1] + pSPARC->k2[kpt] * b2[1] +
-                        pSPARC->k3[kpt] * b3[1],
-                    pSPARC->k1[kpt] * b1[2] + pSPARC->k2[kpt] * b2[2] +
-                        pSPARC->k3[kpt] * b3[2]};
+                    pSPARC->k1_fc[kpt] * b1[0] + pSPARC->k2_fc[kpt] * b2[0] +
+                        pSPARC->k3_fc[kpt] * b3[0],
+                    pSPARC->k1_fc[kpt] * b1[1] + pSPARC->k2_fc[kpt] * b2[1] +
+                        pSPARC->k3_fc[kpt] * b3[1],
+                    pSPARC->k1_fc[kpt] * b1[2] + pSPARC->k2_fc[kpt] * b2[2] +
+                        pSPARC->k3_fc[kpt] * b3[2]};
+
                 for (int nn = 0; nn < nntot; nn++) {
 
                     int image_index = nnlist[nn * num_kpts + kpt] - 1;
 
-                    double kpcart[3] = {pSPARC->k1[image_index] * b1[0] +
-                                            pSPARC->k2[image_index] * b2[0] +
-                                            pSPARC->k3[image_index] * b3[0],
-                                        pSPARC->k1[image_index] * b1[1] +
-                                            pSPARC->k2[image_index] * b2[1] +
-                                            pSPARC->k3[image_index] * b3[1],
-                                        pSPARC->k1[image_index] * b1[2] +
-                                            pSPARC->k2[image_index] * b2[2] +
-                                            pSPARC->k3[image_index] * b3[2]};
+                    double kpcart[3] = {pSPARC->k1_fc[image_index] * b1[0] +
+                                            pSPARC->k2_fc[image_index] * b2[0] +
+                                            pSPARC->k3_fc[image_index] * b3[0],
+                                        pSPARC->k1_fc[image_index] * b1[1] +
+                                            pSPARC->k2_fc[image_index] * b2[1] +
+                                            pSPARC->k3_fc[image_index] * b3[1],
+                                        pSPARC->k1_fc[image_index] * b1[2] +
+                                            pSPARC->k2_fc[image_index] * b2[2] +
+                                            pSPARC->k3_fc[image_index] * b3[2]};
 
                     double bcart[3] = {kpcart[0] - kcart[0],
                                        kpcart[1] - kcart[1],
@@ -943,33 +951,42 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
                     int n2 = nncell[nn * num_kpts * 3 + kpt * 3 + 1];
                     int n3 = nncell[nn * num_kpts * 3 + kpt * 3 + 2];
 
+                    bcart[0] += (double)n1 * b1[0] + (double)n2 * b2[0] +
+                                (double)n3 * b3[0];
+                    bcart[1] += (double)n1 * b1[1] + (double)n2 * b2[1] +
+                                (double)n3 * b3[1];
+                    bcart[2] += (double)n1 * b1[2] + (double)n2 * b2[2] +
+                                (double)n3 * b3[2];
+
                     for (int m = 0; m < num_bands; m++) {
                         for (int n = 0; n < num_bands; n++) {
                             for (int s = 0; s < pSPARC->Nspinor_eig; s++) {
                                 // MMN matrix element between band m and n at
                                 // kpt and image_index
                                 double complex mmn_element = 0.0 + 0.0 * I;
-                                for (int iz = 0; iz < pSPARC->Nx; iz++) {
+                                for (int iz = 0; iz < pSPARC->Nz; iz++) {
                                     double gz = (pSPARC->Nz > 1)
                                                     ? ((double)iz /
                                                        (double)(pSPARC->Nz - 1))
                                                     : 0.0;
-                                    gz = gz + (double)n3;
+                                    /* gz += (double)n3; */
+
                                     for (int iy = 0; iy < pSPARC->Ny; iy++) {
                                         double gy =
-                                            (pSPARC->Nz > 1)
+                                            (pSPARC->Ny > 1)
                                                 ? ((double)iy /
                                                    (double)(pSPARC->Ny - 1))
                                                 : 0.0;
-                                        gy = gy + (double)n2;
+                                        /* gy += (double)n2; */
+
                                         for (int ix = 0; ix < pSPARC->Nx;
                                              ix++) {
                                             double gx =
                                                 (pSPARC->Nx > 1)
-                                                    ? ((double)iz /
-                                                       (double)(pSPARC->Nz - 1))
+                                                    ? ((double)ix /
+                                                       (double)(pSPARC->Nx - 1))
                                                     : 0.0;
-                                            gx = gx + (double)n1;
+                                            /* gx += (double)n1; */
 
                                             double r[3] = {
                                                 gx * a1[0] + gy * a2[0] +
@@ -987,13 +1004,12 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
                                                          bcart[2] * r[2];
 
                                             double complex psi =
-                                                cos(phi) + I * sin(phi);
+                                                cos(phi) - I * sin(phi);
                                             // pSPARC->Xorb_kpt[];
                                             mmn_element +=
                                                 conj(
                                                     orbital_global
-                                                        [image_index *
-                                                             pSPARC->Nstates *
+                                                        [kpt * pSPARC->Nstates *
                                                              pSPARC->Nspin *
                                                              pSPARC->Nd *
                                                              pSPARC
@@ -1003,31 +1019,37 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
                                                              pSPARC->Nd *
                                                              pSPARC
                                                                  ->Nspinor_eig +
-                                                         m * pSPARC->Nd *
+                                                         n * pSPARC->Nd *
                                                              pSPARC
                                                                  ->Nspinor_eig +
                                                          s * pSPARC->Nd + i]) *
                                                 psi *
                                                 orbital_global
-                                                    [kpt * pSPARC->Nstates *
+                                                    [image_index *
+                                                         pSPARC->Nstates *
                                                          pSPARC->Nspin *
                                                          pSPARC->Nd *
                                                          pSPARC->Nspinor_eig +
                                                      spin * pSPARC->Nstates *
                                                          pSPARC->Nd *
                                                          pSPARC->Nspinor_eig +
-                                                     n * pSPARC->Nd *
+                                                     m * pSPARC->Nd *
                                                          pSPARC->Nspinor_eig +
                                                      s * pSPARC->Nd + i];
                                         }
                                     }
                                 }
-                                mmn_element *= pSPARC->dV;
-                                // mmn_element /= pSPARC->Nd; // Normalize
+
+                                /* mmn_element /= pSPARC->Nd; // Normalize */
                                 MMN_Matrix[spin * pSPARC->Nkpts_sym *
-                                               pSPARC->Nspinor_eig +
-                                           kpt * pSPARC->Nspinor_eig +
-                                           s][nn][m][n] = mmn_element;
+                                               pSPARC->Nspinor_eig * nntot *
+                                               num_bands * num_bands +
+                                           kpt * pSPARC->Nspinor_eig * nntot *
+                                               num_bands * num_bands +
+                                           s * nntot * num_bands * num_bands +
+                                           nn * num_bands * num_bands +
+                                           m * num_bands + n] =
+                                    mmn_element * pSPARC->dV;
                             }
                         }
                     }
@@ -1041,7 +1063,7 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
 #ifdef DEBUG
     t2 = MPI_Wtime();
     if (!rank)
-        printf("\nTime for calculating MMN: %.3f ms\n", (t2 - t1) * 1e3);
+        printf("\nTime for calculating MMN: %.3f s\n", t2 - t1);
 #endif
 }
 
@@ -1049,7 +1071,7 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                    int *exclude_bands, double *proj_site, int *proj_l,
                    int *proj_m, int *proj_radial, double *proj_z,
                    double *proj_x, double *proj_zona, int gamma_only,
-                   int spionr, double complex *AMN_Matrix) {
+                   int spinor, double complex *AMN_Matrix) {
     int rank;
     int size;
 
@@ -1102,7 +1124,7 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
 
             for (int band = 0; band < num_bands; ++band) {
 
-                const int excluded =
+                int excluded =
                     (exclude_bands != NULL && exclude_bands[band] != 0);
 
                 for (int iw = 0; iw < num_wann; ++iw) {
@@ -1111,30 +1133,35 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
 
                     if (!excluded) {
 
-                        const double fx = proj_site[3 * band + 0];
-                        const double fy = proj_site[3 * band + 1];
-                        const double fz = proj_site[3 * band + 2];
+                        int proj_index = iw;
 
-                        int radial = proj_radial[band];
+                        const double fx = proj_site[3 * proj_index + 0];
+                        const double fy = proj_site[3 * proj_index + 1];
+                        const double fz = proj_site[3 * proj_index + 2];
 
-                        int l = proj_l[band];
-                        int m = proj_m[band];
+                        int radial = proj_radial[proj_index];
 
-                        double zona = (proj_zona ? proj_zona[band] : 1.0);
+                        int l = proj_l[proj_index];
+                        int m = proj_m[proj_index];
+
+                        double zona = (proj_zona ? proj_zona[proj_index] : 1.0);
+
                         if (!(zona > 0.0) || !isfinite(zona))
                             zona = 1.0;
 
                         double zdir[3] = {0.0, 0.0, 1.0};
                         double xdir[3] = {1.0, 0.0, 0.0};
+
                         if (proj_z) {
-                            zdir[0] = proj_z[3 * band + 0];
-                            zdir[1] = proj_z[3 * band + 1];
-                            zdir[2] = proj_z[3 * band + 2];
+                            zdir[0] = proj_z[3 * proj_index + 0];
+                            zdir[1] = proj_z[3 * proj_index + 1];
+                            zdir[2] = proj_z[3 * proj_index + 2];
                         }
+
                         if (proj_x) {
-                            xdir[0] = proj_x[3 * band + 0];
-                            xdir[1] = proj_x[3 * band + 1];
-                            xdir[2] = proj_x[3 * band + 2];
+                            xdir[0] = proj_x[3 * proj_index + 0];
+                            xdir[1] = proj_x[3 * proj_index + 1];
+                            xdir[2] = proj_x[3 * proj_index + 2];
                         }
 
                         double e1[3], e2[3], e3[3];
@@ -1146,26 +1173,27 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                             rcut = 1e9;
 
                         // double complex psi_sum = 0.0 + 0.0 * I;
-                        for (int spin = 0; spin < pSPARC->Nspin; ++spin) {
-                            for (int s = 0; s < pSPARC->Nspinor_eig; ++s) {
+                        for (int spin = 0; spin < pSPARC->Nspin; spin++) {
+
+                            for (int s = 0; s < pSPARC->Nspinor_eig; s++) {
 
                                 accum = 0.0 + 0.0 * I;
 
-                                for (int iz = 0; iz < Nz; ++iz) {
+                                for (int iz = 0; iz < Nz; iz++) {
                                     double gz =
                                         (Nz > 1)
                                             ? ((double)iz / (double)(Nz - 1))
                                             : 0.0;
                                     double dzf = wrap_mhalf_half(gz - fz);
 
-                                    for (int iy = 0; iy < Ny; ++iy) {
+                                    for (int iy = 0; iy < Ny; iy++) {
                                         double gy = (Ny > 1)
                                                         ? ((double)iy /
                                                            (double)(Ny - 1))
                                                         : 0.0;
                                         double dyf = wrap_mhalf_half(gy - fy);
 
-                                        for (int ix = 0; ix < Nx; ++ix) {
+                                        for (int ix = 0; ix < Nx; ix++) {
                                             double gx = (Nx > 1)
                                                             ? ((double)ix /
                                                                (double)(Nx - 1))
@@ -1210,17 +1238,21 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                                 HybridYlm(l, m, rloc[0],
                                                           rloc[1], rloc[2]);
 
-                                            double Rl =
-                                                (radial == 0)
-                                                    ? 0.0
-                                                    : Radial(radial, r, zona);
-                                            if (l < 0)
-                                                l = -l;
                                             /* double Rl = */
-                                            /*     radial_gaussian(l, r, zona); */
-                                            /* double Rl = radial_slater(l, r, zona); */
+                                            /*     (radial == 0) */
+                                            /*         ? 0.0 */
+                                            /*         : Radial(radial, r,
+                                             * zona); */
+                                            int l_radial = l;
+                                            if (l < 0)
+                                                l_radial = 0;
+                                            double Rl = radial_gaussian(
+                                                l_radial, r, zona);
+                                            /* double Rl = radial_slater(l, r,
+                                             * zona); */
 
-                                            double phi_proj = Rl * Theta_lm;
+                                            double phi_proj =
+                                                Rl * Theta_lm / sqrt(dV);
 
                                             int gindex =
                                                 iz * Ny * Nx + iy * Nx + ix;
@@ -1236,7 +1268,7 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                                        s * Nd;
                                             double complex psi =
                                                 orbital_global[base + gindex];
-                                            accum += conj(psi) * (phi_proj)*dV;
+                                            accum += conj(phi_proj) * psi * dV;
                                         }
                                     }
                                 }
@@ -1257,7 +1289,7 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
     t2 = MPI_Wtime();
     if (!rank) {
         free(orbital_global);
-        printf("\nTime for calculating AMN: %.3f ms\n", (t2 - t1) * 1e3);
+        printf("\nTime for calculating AMN: %.3f s\n", t2 - t1);
     }
 #endif
 }
@@ -1380,58 +1412,62 @@ void Collect_orbital(SPARC_OBJ *pSPARC, double complex *orbital_global) {
     }
 
     // gather all orbital_single to rank 0 of global comm
-    if (rank == 0) {
-        for (int kpt = 9; kpt < pSPARC->kpt_end_indx; kpt++) {
-            int kpt_shift = kpt - pSPARC->kpt_start_indx;
-            int kpt_flag =
-                kpt <= pSPARC->kpt_start_indx && kpt >= pSPARC->kpt_end_indx;
+    /* if (rank == 0) { */
+    /*     for (int kpt = 9; kpt < pSPARC->kpt_end_indx; kpt++) { */
+    /*         int kpt_shift = kpt - pSPARC->kpt_start_indx; */
+    /*         int kpt_flag = */
+    /*             kpt <= pSPARC->kpt_start_indx && kpt >= pSPARC->kpt_end_indx;
+     */
 
-            for (int band = pSPARC->band_start_indx;
-                 band <= pSPARC->band_end_indx; band++) {
-                int band_shift = band - pSPARC->band_start_indx;
-                int band_flag = band <= pSPARC->band_start_indx &&
-                                band >= pSPARC->band_end_indx;
+    /*         for (int band = pSPARC->band_start_indx; */
+    /*              band <= pSPARC->band_end_indx; band++) { */
+    /*             int band_shift = band - pSPARC->band_start_indx; */
+    /*             int band_flag = band <= pSPARC->band_start_indx && */
+    /*                             band >= pSPARC->band_end_indx; */
 
-                for (int spin = pSPARC->spin_start_indx;
-                     spin <= pSPARC->spin_end_indx; spin++) {
-                    int spin_shift = spin - pSPARC->spin_start_indx;
-                    int spin_flag = spin <= pSPARC->spin_start_indx &&
-                                    spin >= pSPARC->spin_end_indx;
+    /*             for (int spin = pSPARC->spin_start_indx; */
+    /*                  spin <= pSPARC->spin_end_indx; spin++) { */
+    /*                 int spin_shift = spin - pSPARC->spin_start_indx; */
+    /*                 int spin_flag = spin <= pSPARC->spin_start_indx && */
+    /*                                 spin >= pSPARC->spin_end_indx; */
 
-                    int tag = kpt * pSPARC->Nstates * pSPARC->Nspin +
-                              band * pSPARC->Nspin + spin;
+    /*                 int tag = kpt * pSPARC->Nstates * pSPARC->Nspin + */
+    /*                           band * pSPARC->Nspin + spin; */
 
-                    int rank_comm;
-                    MPI_Comm_rank(pSPARC->dmcomm, &rank_comm);
-                    if (spin_flag && band_flag && kpt_flag) {
-                        MPI_Recv(orbital_global +
-                                     kpt * pSPARC->Nstates * pSPARC->Nspin *
-                                         Nd * pSPARC->Nspinor_eig +
-                                     spin * pSPARC->Nstates * Nd *
-                                         pSPARC->Nspinor_eig +
-                                     band * Nd * pSPARC->Nspinor_eig,
-                                 Nd * pSPARC->Nspinor_eig, MPI_DOUBLE_COMPLEX,
-                                 MPI_ANY_SOURCE, tag, alldmcomm,
-                                 MPI_STATUS_IGNORE);
-                    } else {
-                        memcpy(orbital_global +
-                                   kpt * pSPARC->Nstates * pSPARC->Nspin * Nd *
-                                       pSPARC->Nspinor_eig +
-                                   spin * pSPARC->Nstates * Nd *
-                                       pSPARC->Nspinor_eig +
-                                   band * Nd * pSPARC->Nspinor_eig,
-                               orbital_single + kpt_shift * band_shift *
-                                                    spin_shift *
-                                                    (Nd * pSPARC->Nspinor_eig),
-                               sizeof(double complex) *
-                                   (Nd * pSPARC->Nspinor_eig));
-                    }
-                }
-            }
-        }
-    }
+    /*                 int rank_comm; */
+    /*                 MPI_Comm_rank(pSPARC->dmcomm, &rank_comm); */
+    /*                 if (spin_flag && band_flag && kpt_flag) { */
+    /*                     MPI_Recv(orbital_global + */
+    /*                                  kpt * pSPARC->Nstates * pSPARC->Nspin *
+     */
+    /*                                      Nd * pSPARC->Nspinor_eig + */
+    /*                                  spin * pSPARC->Nstates * Nd * */
+    /*                                      pSPARC->Nspinor_eig + */
+    /*                                  band * Nd * pSPARC->Nspinor_eig, */
+    /*                              Nd * pSPARC->Nspinor_eig,
+     * MPI_DOUBLE_COMPLEX, */
+    /*                              MPI_ANY_SOURCE, tag, alldmcomm, */
+    /*                              MPI_STATUS_IGNORE); */
+    /*                 } else { */
+    /*                     memcpy(orbital_global + */
+    /*                                kpt * pSPARC->Nstates * pSPARC->Nspin * Nd
+     * * */
+    /*                                    pSPARC->Nspinor_eig + */
+    /*                                spin * pSPARC->Nstates * Nd * */
+    /*                                    pSPARC->Nspinor_eig + */
+    /*                                band * Nd * pSPARC->Nspinor_eig, */
+    /*                            orbital_single + kpt_shift * band_shift * */
+    /*                                                 spin_shift * */
+    /*                                                 (Nd *
+     * pSPARC->Nspinor_eig), */
+    /*                            sizeof(double complex) * */
+    /*                                (Nd * pSPARC->Nspinor_eig)); */
+    /*                 } */
+    /*             } */
+    /*         } */
+    /*     } */
+    /* } */
 
-    // print each rank kpt band spin size
     free(orbital_single);
     MPI_Comm_free(&alldmcomm);
 }
@@ -1634,19 +1670,14 @@ void build_local_frame_from_zx(const double zdir_in[3], const double xdir_in[3],
     e3[2] = zdir_in[2];
     double xdir[3] = {xdir_in[0], xdir_in[1], xdir_in[2]};
 
-    if (sqrt(e3[0] * e3[0] + e3[1] * e3[1] + e3[2] * e3[2]) < 0.0) {
-        e3[0] = 0.0;
-        e3[1] = 0.0;
-        e3[2] = 1.0;
-    }
-
-    double proj = xdir[0] * e3[0] + xdir[0] * e3[0] + xdir[0] * e3[0];
+    double proj = xdir[0] * e3[0] + xdir[1] * e3[1] + xdir[2] * e3[2];
 
     xdir[0] -= proj * e3[0];
     xdir[1] -= proj * e3[1];
     xdir[2] -= proj * e3[2];
 
-    if (sqrt(xdir[0] * xdir[0] + xdir[1] * xdir[1] + xdir[2] * xdir[2]) < 0.0) {
+    if (sqrt(xdir[0] * xdir[0] + xdir[1] * xdir[1] + xdir[2] * xdir[2]) <
+        1e-8) {
         double tmp[3] = {1.0, 0.0, 0.0};
         if (fabs(e3[0]) > 0.9) {
             tmp[0] = 0.0;
@@ -1698,7 +1729,8 @@ double Plm(int l, int m, double x) {
         double somx2 = sqrt((1.0 - x) * (1.0 + x));
         double fact = 1.0;
         for (int i = 1; i <= m; ++i) {
-            pmm *= -fact * somx2;
+            /* pmm *= -fact * somx2; */
+            pmm *= fact * somx2;
             fact += 2.0;
         }
     }
@@ -1759,9 +1791,9 @@ double HybridYlm(int l, int m, double rx, double ry, double rz) {
     case -1:
         switch (m) {
         case 1:
-            return (Ylm(0, 0, rx, ry, rz) + Ylm(1, 1, rx, ry, rz)) / sqrt(2.0);
+            return (Ylm(0, 1, rx, ry, rz) + Ylm(1, 2, rx, ry, rz)) / sqrt(2.0);
         case 2:
-            return (Ylm(0, 0, rx, ry, rz) - Ylm(1, 1, rx, ry, rz)) / sqrt(2.0);
+            return (Ylm(0, 1, rx, ry, rz) - Ylm(1, 2, rx, ry, rz)) / sqrt(2.0);
         default:
             return 0.0;
         }
@@ -1769,15 +1801,15 @@ double HybridYlm(int l, int m, double rx, double ry, double rz) {
     case -2:
         switch (m) {
         case 1:
-            return (Ylm(0, 0, rx, ry, rz) - Ylm(1, 1, rx, ry, rz) / sqrt(2.0) +
-                    Ylm(1, -1, rx, ry, rz)) /
-                   sqrt(3.0);
+            return Ylm(0, 1, rx, ry, rz) / sqrt(3.0) -
+                   Ylm(1, 2, rx, ry, rz) / sqrt(6.0) +
+                   Ylm(1, 3, rx, ry, rz) / sqrt(2.0);
         case 2:
-            return (Ylm(0, 0, rx, ry, rz) - Ylm(1, 1, rx, ry, rz) / sqrt(2.0) -
-                    Ylm(1, -1, rx, ry, rz)) /
-                   sqrt(3.0);
+            return Ylm(0, 1, rx, ry, rz) / sqrt(3.0) -
+                   Ylm(1, 2, rx, ry, rz) / sqrt(6.0) -
+                   Ylm(1, 3, rx, ry, rz) / sqrt(2.0);
         case 3:
-            return (Ylm(0, 0, rx, ry, rz) + sqrt(2.0) * Ylm(1, 1, rx, ry, rz)) /
+            return (Ylm(0, 1, rx, ry, rz) + sqrt(2.0) * Ylm(1, 2, rx, ry, rz)) /
                    sqrt(3.0);
         default:
             return 0.0;
@@ -1786,74 +1818,70 @@ double HybridYlm(int l, int m, double rx, double ry, double rz) {
     case -3:
         switch (m) {
         case 1:
-            return 0.5 * (Ylm(0, 0, rx, ry, rz) + Ylm(1, 1, rx, ry, rz) +
-                          Ylm(1, -1, rx, ry, rz) + Ylm(1, 0, rx, ry, rz));
+            return (Ylm(0, 1, rx, ry, rz) + Ylm(1, 2, rx, ry, rz) +
+                    Ylm(1, 3, rx, ry, rz) + Ylm(1, 1, rx, ry, rz)) /
+                   2.0;
         case 2:
-            return 0.5 * (Ylm(0, 0, rx, ry, rz) + Ylm(1, 1, rx, ry, rz) -
-                          Ylm(1, -1, rx, ry, rz) - Ylm(1, 0, rx, ry, rz));
+            return (Ylm(0, 1, rx, ry, rz) + Ylm(1, 2, rx, ry, rz) -
+                    Ylm(1, 3, rx, ry, rz) - Ylm(1, 1, rx, ry, rz)) /
+                   2.0;
         case 3:
-            return 0.5 * (Ylm(0, 0, rx, ry, rz) - Ylm(1, 1, rx, ry, rz) +
-                          Ylm(1, -1, rx, ry, rz) - Ylm(1, 0, rx, ry, rz));
+            return (Ylm(0, 1, rx, ry, rz) - Ylm(1, 2, rx, ry, rz) +
+                    Ylm(1, 3, rx, ry, rz) - Ylm(1, 1, rx, ry, rz)) /
+                   2.0;
         case 4:
-            return 0.5 * (Ylm(0, 0, rx, ry, rz) - Ylm(1, 1, rx, ry, rz) -
-                          Ylm(1, -1, rx, ry, rz) + Ylm(1, 0, rx, ry, rz));
-        default:
-            return 0.0;
+            return (Ylm(0, 1, rx, ry, rz) - Ylm(1, 2, rx, ry, rz) -
+                    Ylm(1, 3, rx, ry, rz) + Ylm(1, 1, rx, ry, rz)) /
+                   2.0;
         }
-
     case -4:
         switch (m) {
         case 1:
-            return (Ylm(0, 0, rx, ry, rz) - Ylm(1, 1, rx, ry, rz) / sqrt(2.0) +
-                    Ylm(1, -1, rx, ry, rz)) /
-                   sqrt(3.0);
+            return Ylm(0, 1, rx, ry, rz) / sqrt(3.0) -
+                   Ylm(1, 2, rx, ry, rz) / sqrt(6.0) +
+                   Ylm(1, 3, rx, ry, rz) / sqrt(2);
         case 2:
-            return (Ylm(0, 0, rx, ry, rz) - Ylm(1, 1, rx, ry, rz) / sqrt(2.0) -
-                    Ylm(1, -1, rx, ry, rz)) /
-                   sqrt(3.0);
+            return Ylm(0, 1, rx, ry, rz) / sqrt(3.0) -
+                   Ylm(1, 2, rx, ry, rz) / sqrt(6.0) -
+                   Ylm(1, 3, rx, ry, rz) / sqrt(2);
         case 3:
-            return (Ylm(0, 0, rx, ry, rz) + sqrt(2.0) * Ylm(1, 1, rx, ry, rz)) /
-                   sqrt(3.0);
+            return (Ylm(0, 1, rx, ry, rz) + sqrt(2.0) * Ylm(1, 2, rx, ry, rz)) /
+                   sqrt(3);
         case 4:
-            return (Ylm(1, 0, rx, ry, rz) + Ylm(2, 0, rx, ry, rz)) / sqrt(2.0);
+            return (Ylm(1, 1, rx, ry, rz) + Ylm(2, 1, rx, ry, rz)) / sqrt(2);
         case 5:
-            return (-Ylm(1, 0, rx, ry, rz) + Ylm(2, 0, rx, ry, rz)) / sqrt(2.0);
-        default:
-            return 0.0;
+            return (-Ylm(1, 1, rx, ry, rz) + Ylm(2, 1, rx, ry, rz)) / sqrt(2);
         }
-
     case -5:
         switch (m) {
         case 1:
-            return Ylm(0, 0, rx, ry, rz) / sqrt(6.0) -
-                   Ylm(1, 1, rx, ry, rz) / sqrt(2.0) -
-                   Ylm(2, 0, rx, ry, rz) / sqrt(12.0) +
-                   0.5 * Ylm(2, 2, rx, ry, rz);
+            return (Ylm(0, 1, rx, ry, rz) / sqrt(6.0) -
+                    Ylm(1, 2, rx, ry, rz) / sqrt(2.0) -
+                    Ylm(2, 1, rx, ry, rz) / sqrt(12.0) +
+                    Ylm(2, 4, rx, ry, rz) / 2.0);
         case 2:
-            return Ylm(0, 0, rx, ry, rz) / sqrt(6.0) +
-                   Ylm(1, 1, rx, ry, rz) / sqrt(2.0) -
-                   Ylm(2, 0, rx, ry, rz) / sqrt(12.0) +
-                   0.5 * Ylm(2, 2, rx, ry, rz);
+            return (Ylm(0, 1, rx, ry, rz) / sqrt(6.0) +
+                    Ylm(1, 2, rx, ry, rz) / sqrt(2.0) -
+                    Ylm(2, 1, rx, ry, rz) / sqrt(12.0) +
+                    Ylm(2, 4, rx, ry, rz) / 2.0);
         case 3:
-            return Ylm(0, 0, rx, ry, rz) / sqrt(6.0) -
-                   Ylm(1, -1, rx, ry, rz) / sqrt(2.0) -
-                   Ylm(2, 0, rx, ry, rz) / sqrt(12.0) -
-                   0.5 * Ylm(2, 2, rx, ry, rz);
+            return (Ylm(0, 1, rx, ry, rz) / sqrt(6.0) -
+                    Ylm(1, 2, rx, ry, rz) / sqrt(2.0) -
+                    Ylm(2, 1, rx, ry, rz) / sqrt(12.0) -
+                    Ylm(2, 4, rx, ry, rz) / 2.0);
         case 4:
-            return Ylm(0, 0, rx, ry, rz) / sqrt(6.0) +
-                   Ylm(1, -1, rx, ry, rz) / sqrt(2.0) -
-                   Ylm(2, 0, rx, ry, rz) / sqrt(12.0) -
-                   0.5 * Ylm(2, 2, rx, ry, rz);
+            return (Ylm(0, 1, rx, ry, rz) / sqrt(6.0) +
+                    Ylm(1, 2, rx, ry, rz) / sqrt(2.0) -
+                    Ylm(2, 1, rx, ry, rz) / sqrt(12.0) -
+                    Ylm(2, 4, rx, ry, rz) / 2.0);
         case 5:
-            return Ylm(0, 0, rx, ry, rz) / sqrt(6.0) -
-                   Ylm(1, 0, rx, ry, rz) / sqrt(2.0) +
-                   Ylm(2, 0, rx, ry, rz) / sqrt(3.0);
+            return Ylm(0, 1, rx, ry, rz) / sqrt(6.0) -
+                   Ylm(1, 1, rx, ry, rz) / sqrt(2.0) +
+                   Ylm(2, 1, rx, ry, rz) / sqrt(3.0);
         case 6:
-            return Ylm(0, 0, rx, ry, rz) / sqrt(6.0) +
-                   Ylm(1, 0, rx, ry, rz) / sqrt(2.0) +
-                   Ylm(2, 0, rx, ry, rz) / sqrt(3.0);
-        default:
-            return 0.0;
+            return Ylm(0, 1, rx, ry, rz) / sqrt(6.0) +
+                   Ylm(1, 1, rx, ry, rz) / sqrt(2.0) +
+                   Ylm(2, 1, rx, ry, rz) / sqrt(3.0);
         }
 
     default:

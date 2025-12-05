@@ -36,14 +36,14 @@ void wannier_setup_(const char *seed_name,
 
 void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
                    int *nncell, int num_bands,
-                   double complex MMN_Matrix[][nntot][num_bands][num_bands]);
+                   double complex *MMN_Matrix);
 
 void Write_EIG(SPARC_OBJ *pSPARC);
 
 void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                    int *exclude_bands, double *proj_site, int *proj_l,
                    int *proj_m, int *proj_radial, double *proj_z, double *proj_x,
-                   double *proj_zona, int gamma_only, int spionr,
+                   double *proj_zona, int gamma_only, int spinor,
                    double complex *AMN_Matrix);
 void Get_All_Cart_Coord(SPARC_OBJ *pSPARC);
 
