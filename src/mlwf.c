@@ -1185,6 +1185,7 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                             ? ((double)iz / (double)(Nz - 1))
                                             : 0.0;
                                     double dzf = wrap_mhalf_half(gz - fz);
+                                    double shift_z = dzf - gz + fz;
 
                                     for (int iy = 0; iy < Ny; iy++) {
                                         double gy = (Ny > 1)
@@ -1192,6 +1193,7 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                                            (double)(Ny - 1))
                                                         : 0.0;
                                         double dyf = wrap_mhalf_half(gy - fy);
+                                        double shift_y = dyf - gy + fy;
 
                                         for (int ix = 0; ix < Nx; ix++) {
                                             double gx = (Nx > 1)
@@ -1200,6 +1202,18 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                                             : 0.0;
                                             double dxf =
                                                 wrap_mhalf_half(gx - fx);
+                                            double shift_x = dxf - gx + fx;
+
+                                            double k_dot_R =
+                                                2.0 * M_PI *
+                                                ((pSPARC->k1_fc[kpt] *
+                                                  (-shift_x)) +
+                                                 (pSPARC->k2_fc[kpt] *
+                                                  (-shift_y)) +
+                                                 (pSPARC->k3_fc[kpt] *
+                                                  (-shift_z)));
+                                            double complex phase_factor =
+                                                cos(k_dot_R) + I * sin(k_dot_R);
 
                                             double rglob[3];
 
@@ -1241,15 +1255,13 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                             /* double Rl = */
                                             /*     (radial == 0) */
                                             /*         ? 0.0 */
-                                            /*         : Radial(radial, r,
-                                             * zona); */
+                                            /*         : Radial(radial, r, zona); */
                                             int l_radial = l;
                                             if (l < 0)
                                                 l_radial = 0;
                                             double Rl = radial_gaussian(
                                                 l_radial, r, zona);
-                                            /* double Rl = radial_slater(l, r,
-                                             * zona); */
+                                            /* double Rl = radial_slater(l, r, zona); */
 
                                             double phi_proj =
                                                 Rl * Theta_lm / sqrt(dV);
@@ -1268,7 +1280,7 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                                        s * Nd;
                                             double complex psi =
                                                 orbital_global[base + gindex];
-                                            accum += conj(phi_proj) * psi * dV;
+                                            accum += conj(psi) * phase_factor * phi_proj * dV;
                                         }
                                     }
                                 }
