@@ -24,7 +24,7 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     if (!rank)
-        printf("\nStart generating wannier inputs ... \n");
+        printf("\nStart generating wannier inputs ...\n");
 
     Write_EIG(pSPARC);
 
@@ -81,12 +81,12 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
 
 #ifdef DEBUG
     if (!rank)
-        printf("Start convert unit \n");
+        printf("Start convert unit\n");
 #endif
 
     for (int i = 0; i < num_atoms; i++) {
-        atom_symbols[i][0] = '\0';
-        atom_symbols[i][1] = '\0';
+        atom_symbols[i][0] = ' ';
+        atom_symbols[i][1] = ' ';
         atom_symbols[i][2] = ' ';
     }
 
@@ -97,8 +97,11 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
                 index += pSPARC->nAtomv[k];
         }
         for (int j = 0; j < pSPARC->nAtomv[i]; j++) {
+            int n = 2;
+            if(pSPARC->atomType[i * L_ATMTYPE + 1] == '\0')
+                n = 1;
             memcpy(atom_symbols[j + index], pSPARC->atomType + i * L_ATMTYPE,
-                   2);
+                   n);
         }
     }
 
@@ -175,27 +178,60 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
 
     if (!rank) {
         for (int i = 0; i < pSPARC->n_atom; i++) {
-            printf("atom %d: %4.8f  %4.8f  %4.8f, IsFrac = %d\n", i,
-                   pSPARC->atom_pos[3 * i], pSPARC->atom_pos[3 * i + 1],
-                   pSPARC->atom_pos[3 * i + 2], pSPARC->IsFrac[i]);
+            printf("atom %d: %4.8f  %4.8f  %4.8f\n", i, pSPARC->atom_pos[3 * i],
+                   pSPARC->atom_pos[3 * i + 1], pSPARC->atom_pos[3 * i + 2]);
         }
     }
 
-    for (int i = 0; i < num_atoms; i++) {
-        if (pSPARC->IsFrac[i] == 1) {
-            atoms_cart[3 * i + 0] = pSPARC->atom_pos[3 * i + 0] * a1[0] +
-                                    pSPARC->atom_pos[3 * i + 1] * a2[0] +
-                                    pSPARC->atom_pos[3 * i + 2] * a3[0];
-            atoms_cart[3 * i + 1] = pSPARC->atom_pos[3 * i + 0] * a1[1] +
-                                    pSPARC->atom_pos[3 * i + 1] * a2[1] +
-                                    pSPARC->atom_pos[3 * i + 2] * a3[1];
-            atoms_cart[3 * i + 2] = pSPARC->atom_pos[3 * i + 0] * a1[2] +
-                                    pSPARC->atom_pos[3 * i + 1] * a2[2] +
-                                    pSPARC->atom_pos[3 * i + 2] * a3[2];
-        } else {
-            atoms_cart[3 * i + 0] = pSPARC->atom_pos[3 * i + 0] * CONST_BOHR;
-            atoms_cart[3 * i + 1] = pSPARC->atom_pos[3 * i + 1] * CONST_BOHR;
-            atoms_cart[3 * i + 2] = pSPARC->atom_pos[3 * i + 2] * CONST_BOHR;
+    /* for (int i = 0; i < num_atoms; i++) { */
+    /*     atoms_cart[3 * i + 0] = pSPARC->atom_pos[3 * i + 0] * CONST_BOHR; */
+    /*     atoms_cart[3 * i + 1] = pSPARC->atom_pos[3 * i + 1] * CONST_BOHR; */
+    /*     atoms_cart[3 * i + 2] = pSPARC->atom_pos[3 * i + 2] * CONST_BOHR; */
+    /* } */
+
+    double range_x =
+        pSPARC->latvec_scale_x * sqrt(pSPARC->LatVec[0] * pSPARC->LatVec[0] +
+                                      pSPARC->LatVec[1] * pSPARC->LatVec[1] +
+                                      pSPARC->LatVec[2] * pSPARC->LatVec[2]);
+    double range_y =
+        pSPARC->latvec_scale_y * sqrt(pSPARC->LatVec[3] * pSPARC->LatVec[3] +
+                                      pSPARC->LatVec[4] * pSPARC->LatVec[4] +
+                                      pSPARC->LatVec[5] * pSPARC->LatVec[5]);
+    double range_z =
+        pSPARC->latvec_scale_z * sqrt(pSPARC->LatVec[6] * pSPARC->LatVec[6] +
+                                      pSPARC->LatVec[7] * pSPARC->LatVec[7] +
+                                      pSPARC->LatVec[8] * pSPARC->LatVec[8]);
+
+    for (int i = 0; i < pSPARC->Ntypes; i++) {
+        int index = 0;
+        if (i > 0) {
+            for (int k = 0; k < i; k++)
+                index += pSPARC->nAtomv[k];
+        }
+        for (int j = 0; j < pSPARC->nAtomv[i]; j++) {
+            index += j;
+            if (pSPARC->IsFrac[i]) {
+                double atom_fc[3];
+                atom_fc[0] = pSPARC->atom_pos[3 * index + 0] / range_x;
+                atom_fc[1] = pSPARC->atom_pos[3 * index + 1] / range_y;
+                atom_fc[2] = pSPARC->atom_pos[3 * index + 2] / range_z;
+                atoms_cart[3 * index + 0] = atom_fc[0] * a1[0] +
+                                            atom_fc[1] * a2[0] +
+                                            atom_fc[2] * a3[0];
+                atoms_cart[3 * index + 1] = atom_fc[0] * a1[1] +
+                                            atom_fc[1] * a2[1] +
+                                            atom_fc[2] * a3[1];
+                atoms_cart[3 * index + 2] = atom_fc[0] * a1[2] +
+                                            atom_fc[1] * a2[2] +
+                                            atom_fc[2] * a3[2];
+            } else {
+                atoms_cart[3 * index + 0] =
+                    pSPARC->atom_pos[3 * index + 0] * CONST_BOHR;
+                atoms_cart[3 * index + 1] =
+                    pSPARC->atom_pos[3 * index + 1] * CONST_BOHR;
+                atoms_cart[3 * index + 2] =
+                    pSPARC->atom_pos[3 * index + 2] * CONST_BOHR;
+            }
         }
     }
 
@@ -210,41 +246,42 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
         t2 = MPI_Wtime();
         printf("\nTime for convert unit: %.3f s\n", t2 - t1);
 
-        printf("atoms_cart: \n");
+        printf("atoms_cart:\n");
         for (int i = 0; i < 3 * num_atoms; i++) {
             printf("%4.8f  ", atoms_cart[i]);
             if ((i + 1) % 3 == 0)
                 printf("\n");
         }
 
-        printf("real_lattice: \n");
+        printf("real_lattice:\n");
         for (int i = 0; i < 3; i++) {
-            printf("%4.8f  %4.8f  %4.8f \n", real_lattice[i],
+            printf("%4.8f  %4.8f  %4.8f\n", real_lattice[i],
                    real_lattice[i + 3], real_lattice[i + 6]);
         }
-        printf("recip_lattice: \n");
+        printf("recip_lattice:\n");
         for (int i = 0; i < 3; i++) {
-            printf("%4.8f  %4.8f  %4.8f \n", recip_lattice[i],
+            printf("%4.8f  %4.8f  %4.8f\n", recip_lattice[i],
                    recip_lattice[i + 3], recip_lattice[i + 6]);
         }
 
-        printf("kpt_latt: \n");
+        printf("kpt_latt:\n");
         for (int i = 0; i < num_kpts; i++) {
-            printf("kpt %d: %4.8f  %4.8f  %4.8f \n", i, kpt_latt[i * 3],
+            printf("kpt %d: %4.8f  %4.8f  %4.8f\n", i, kpt_latt[i * 3],
                    kpt_latt[i * 3 + 1], kpt_latt[i * 3 + 2]);
         }
 
-        printf("num_kpts: %d \n", num_kpts);
-        printf("num_bands_tot: %d \n", num_bands_tot);
-        printf("num_atoms: %d \n", num_atoms);
+        printf("num_kpts: %d\n", num_kpts);
+        printf("num_bands_tot: %d\n", num_bands_tot);
+        printf("num_atoms: %d\n", num_atoms);
 
         printf("atom_symbols: ");
-        for (int i = 0; i < num_atoms; i++)
-            printf("%s", atom_symbols[i]);
+        for (int i = 0; i < num_atoms; i++) {
+            printf(" %c%c", atom_symbols[i][0], atom_symbols[i][1]);
+        }
         printf("\n");
 
-        printf("gamma_only: %d \n", gamma_only);
-        printf("spinors: %d \n", spinors);
+        printf("gamma_only: %d\n", gamma_only);
+        printf("spinors: %d\n", spinors);
 
         printf("End convert unit\n");
     }
@@ -294,6 +331,7 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
                    proj_s,       // optional
                    proj_s_qaxis, // optional
                    seed_name_len, atom_symbols_len);
+
     if (!rank) {
         FILE *fp_win = fopen(win_filename, "a");
         fclose(fp_win);
@@ -524,8 +562,8 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
                          pSPARC->filename);
                 snprintf(amn_filename_dn, L_STRING, "%s_dn.amn",
                          pSPARC->filename);
-                fp_mmn_up = fopen(amn_filename_up, "w");
-                fp_mmn_dn = fopen(amn_filename_dn, "w");
+                fp_amn_up = fopen(amn_filename_up, "w");
+                fp_amn_dn = fopen(amn_filename_dn, "w");
                 fprintf(fp_amn_up, "Generated by SPARC\n");
                 fprintf(fp_amn_dn, "Generated by SPARC\n");
                 fprintf(fp_amn_up, "%12d %12d %12d\n", num_bands, num_kpts,
@@ -763,6 +801,13 @@ void Write_EIG(SPARC_OBJ *pSPARC) {
         eig_all = recvbuf_eig;
     }
 
+    // convert unit from hartree to eV
+    if (eig_all != NULL) {
+        for (int i = 0; i < pSPARC->Nspin * pSPARC->Nkpts_sym * Ns; i++) {
+            eig_all[i] = eig_all[i] * CONST_EH;
+        }
+    }
+
     // let root process print eigvals and occs to .eigen file
     if (pSPARC->spincomm_index == 0) {
         if (pSPARC->kptcomm_index == 0) {
@@ -967,26 +1012,23 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
                                 for (int iz = 0; iz < pSPARC->Nz; iz++) {
                                     double gz = (pSPARC->Nz > 1)
                                                     ? ((double)iz /
-                                                       (double)(pSPARC->Nz - 1))
+                                                       (double)(pSPARC->Nz - 0))
                                                     : 0.0;
-                                    /* gz += (double)n3; */
 
                                     for (int iy = 0; iy < pSPARC->Ny; iy++) {
                                         double gy =
                                             (pSPARC->Ny > 1)
                                                 ? ((double)iy /
-                                                   (double)(pSPARC->Ny - 1))
+                                                   (double)(pSPARC->Ny - 0))
                                                 : 0.0;
-                                        /* gy += (double)n2; */
 
                                         for (int ix = 0; ix < pSPARC->Nx;
                                              ix++) {
                                             double gx =
                                                 (pSPARC->Nx > 1)
                                                     ? ((double)ix /
-                                                       (double)(pSPARC->Nx - 1))
+                                                       (double)(pSPARC->Nx - 0))
                                                     : 0.0;
-                                            /* gx += (double)n1; */
 
                                             double r[3] = {
                                                 gx * a1[0] + gy * a2[0] +
@@ -1048,8 +1090,7 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
                                                num_bands * num_bands +
                                            s * nntot * num_bands * num_bands +
                                            nn * num_bands * num_bands +
-                                           m * num_bands + n] =
-                                    mmn_element * pSPARC->dV;
+                                           m * num_bands + n] = mmn_element;
                             }
                         }
                     }
@@ -1086,7 +1127,7 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
 #endif
 
     if (!rank) {
-        printf("\nStart calculating AMN ... \n");
+        printf("\nStart calculating AMN ...\n");
 
         orbital_global = (double complex *)malloc(
             pSPARC->Nd * pSPARC->Nstates * pSPARC->Nkpts_sym * pSPARC->Nspin *
@@ -1114,11 +1155,17 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
         a3[1] = pSPARC->LatVec[7] * Lz;
         a3[2] = pSPARC->LatVec[8] * Lz;
 
+        double crossx, crossy, crossz;
+
+        Cross_Product(&crossx, &crossy, &crossz, a2[0], a2[1], a2[2], a3[0],
+                      a3[1], a3[2]);
+
+        double volume = crossx * a1[0] + crossy * a1[1] + crossz * a1[2];
+
         int Nx = pSPARC->Nx;
         int Ny = pSPARC->Ny;
         int Nz = pSPARC->Nz;
         int Nd = pSPARC->Nd;
-        double dV = pSPARC->dV;
 
         for (int kpt = 0; kpt < num_kpts; ++kpt) {
 
@@ -1182,38 +1229,38 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                 for (int iz = 0; iz < Nz; iz++) {
                                     double gz =
                                         (Nz > 1)
-                                            ? ((double)iz / (double)(Nz - 1))
+                                            ? ((double)iz / (double)(Nz - 0))
                                             : 0.0;
                                     double dzf = wrap_mhalf_half(gz - fz);
-                                    double shift_z = dzf - gz + fz;
+                                    double shift_z = gz - fz - dzf;
 
                                     for (int iy = 0; iy < Ny; iy++) {
                                         double gy = (Ny > 1)
                                                         ? ((double)iy /
-                                                           (double)(Ny - 1))
+                                                           (double)(Ny - 0))
                                                         : 0.0;
                                         double dyf = wrap_mhalf_half(gy - fy);
-                                        double shift_y = dyf - gy + fy;
+                                        double shift_y = gy - fy - dyf;
 
                                         for (int ix = 0; ix < Nx; ix++) {
                                             double gx = (Nx > 1)
                                                             ? ((double)ix /
-                                                               (double)(Nx - 1))
+                                                               (double)(Nx - 0))
                                                             : 0.0;
                                             double dxf =
                                                 wrap_mhalf_half(gx - fx);
-                                            double shift_x = dxf - gx + fx;
+                                            double shift_x = gx - fx - dxf;
 
                                             double k_dot_R =
                                                 2.0 * M_PI *
                                                 ((pSPARC->k1_fc[kpt] *
-                                                  (-shift_x)) +
+                                                  shift_x) +
                                                  (pSPARC->k2_fc[kpt] *
-                                                  (-shift_y)) +
+                                                  shift_y) +
                                                  (pSPARC->k3_fc[kpt] *
-                                                  (-shift_z)));
+                                                  shift_z));
                                             double complex phase_factor =
-                                                cos(k_dot_R) + I * sin(k_dot_R);
+                                                cos(k_dot_R) - I * sin(k_dot_R);
 
                                             double rglob[3];
 
@@ -1232,8 +1279,8 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                                      rglob[1] * rglob[1] +
                                                      rglob[2] * rglob[2]);
 
-                                            if (r > rcut)
-                                                continue;
+                                            /* if (r > rcut) */
+                                            /*     continue; */
 
                                             double rloc[3];
 
@@ -1255,16 +1302,26 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                             /* double Rl = */
                                             /*     (radial == 0) */
                                             /*         ? 0.0 */
-                                            /*         : Radial(radial, r, zona); */
+                                            /*         : Radial(radial, r,
+                                             * zona); */
                                             int l_radial = l;
                                             if (l < 0)
                                                 l_radial = 0;
-                                            double Rl = radial_gaussian(
-                                                l_radial, r, zona);
-                                            /* double Rl = radial_slater(l, r, zona); */
+                                            /* double Rl = radial_gaussian( */
+                                            /*     l_radial, r, zona); */
+                                            double Rl = 0;
+                                            if (radial > 0) {
+                                                Rl = radial_laguerre(
+                                                    radial, l_radial, r, zona);
+                                            } else {
+                                                Rl = radial_gaussian(l_radial,
+                                                                     r, zona);
+                                            }
 
-                                            double phi_proj =
-                                                Rl * Theta_lm / sqrt(dV);
+                                            /* double Rl = */
+                                            /*     radial_slater(l, r, zona); */
+
+                                            double phi_proj = Rl * Theta_lm;
 
                                             int gindex =
                                                 iz * Ny * Nx + iy * Nx + ix;
@@ -1280,7 +1337,8 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                                        s * Nd;
                                             double complex psi =
                                                 orbital_global[base + gindex];
-                                            accum += conj(psi) * phase_factor * phi_proj * dV;
+                                            accum += psi * phase_factor *
+                                                     conj(phi_proj);
                                         }
                                     }
                                 }
@@ -1288,7 +1346,8 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                 AMN_Matrix[(spin + s) * num_kpts * num_bands *
                                                num_wann +
                                            kpt * num_bands * num_wann +
-                                           band * num_wann + iw] = accum;
+                                           band * num_wann + iw] =
+                                    accum * pSPARC->dV;
                             }
                         }
                     } /* !excluded */
@@ -1423,63 +1482,6 @@ void Collect_orbital(SPARC_OBJ *pSPARC, double complex *orbital_global) {
         }
     }
 
-    // gather all orbital_single to rank 0 of global comm
-    /* if (rank == 0) { */
-    /*     for (int kpt = 9; kpt < pSPARC->kpt_end_indx; kpt++) { */
-    /*         int kpt_shift = kpt - pSPARC->kpt_start_indx; */
-    /*         int kpt_flag = */
-    /*             kpt <= pSPARC->kpt_start_indx && kpt >= pSPARC->kpt_end_indx;
-     */
-
-    /*         for (int band = pSPARC->band_start_indx; */
-    /*              band <= pSPARC->band_end_indx; band++) { */
-    /*             int band_shift = band - pSPARC->band_start_indx; */
-    /*             int band_flag = band <= pSPARC->band_start_indx && */
-    /*                             band >= pSPARC->band_end_indx; */
-
-    /*             for (int spin = pSPARC->spin_start_indx; */
-    /*                  spin <= pSPARC->spin_end_indx; spin++) { */
-    /*                 int spin_shift = spin - pSPARC->spin_start_indx; */
-    /*                 int spin_flag = spin <= pSPARC->spin_start_indx && */
-    /*                                 spin >= pSPARC->spin_end_indx; */
-
-    /*                 int tag = kpt * pSPARC->Nstates * pSPARC->Nspin + */
-    /*                           band * pSPARC->Nspin + spin; */
-
-    /*                 int rank_comm; */
-    /*                 MPI_Comm_rank(pSPARC->dmcomm, &rank_comm); */
-    /*                 if (spin_flag && band_flag && kpt_flag) { */
-    /*                     MPI_Recv(orbital_global + */
-    /*                                  kpt * pSPARC->Nstates * pSPARC->Nspin *
-     */
-    /*                                      Nd * pSPARC->Nspinor_eig + */
-    /*                                  spin * pSPARC->Nstates * Nd * */
-    /*                                      pSPARC->Nspinor_eig + */
-    /*                                  band * Nd * pSPARC->Nspinor_eig, */
-    /*                              Nd * pSPARC->Nspinor_eig,
-     * MPI_DOUBLE_COMPLEX, */
-    /*                              MPI_ANY_SOURCE, tag, alldmcomm, */
-    /*                              MPI_STATUS_IGNORE); */
-    /*                 } else { */
-    /*                     memcpy(orbital_global + */
-    /*                                kpt * pSPARC->Nstates * pSPARC->Nspin * Nd
-     * * */
-    /*                                    pSPARC->Nspinor_eig + */
-    /*                                spin * pSPARC->Nstates * Nd * */
-    /*                                    pSPARC->Nspinor_eig + */
-    /*                                band * Nd * pSPARC->Nspinor_eig, */
-    /*                            orbital_single + kpt_shift * band_shift * */
-    /*                                                 spin_shift * */
-    /*                                                 (Nd *
-     * pSPARC->Nspinor_eig), */
-    /*                            sizeof(double complex) * */
-    /*                                (Nd * pSPARC->Nspinor_eig)); */
-    /*                 } */
-    /*             } */
-    /*         } */
-    /*     } */
-    /* } */
-
     free(orbital_single);
     MPI_Comm_free(&alldmcomm);
 }
@@ -1569,8 +1571,8 @@ void Collect_orbital_real(SPARC_OBJ *pSPARC, double *x, int *gridsizes,
 
     if (rank_comm == 0) {
         // scale psi to make it L2-norm = 1
-        for (int i = 0; i < Nd * Nspinor_eig; i++)
-            x_global[i] /= sqrt(dV);
+        /* for (int i = 0; i < Nd * Nspinor_eig; i++) */
+        /*     x_global[i] /= sqrt(dV); */
         memcpy(orbital_single, x_global,
                sizeof(double complex) * Nd * Nspinor_eig);
     }
@@ -1660,8 +1662,8 @@ void Collect_orbital_complex(SPARC_OBJ *pSPARC, double complex *x,
 
     if (rank_comm == 0) {
         // scale psi to make it L2-norm = 1
-        for (int i = 0; i < Nd * Nspinor_eig; i++)
-            x_global[i] /= sqrt(dV);
+        /* for (int i = 0; i < Nd * Nspinor_eig; i++) */
+        /*     x_global[i] /= sqrt(dV); */
         memcpy(orbital_single, x_global,
                sizeof(double complex) * Nd * Nspinor_eig);
     }
@@ -1921,6 +1923,40 @@ double Radial(int radial, double r, double alpha) {
     }
     Rl *= factor;
     return Rl;
+}
+
+double laguerre_gen(int n, int alpha, double x) {
+    if (n < 0)
+        return 0.0;
+    if (n == 0)
+        return 1.0;
+
+    double L_prev = 1.0;             // L_0
+    double L_curr = 1.0 + alpha - x; // L_1
+
+    if (n == 1)
+        return L_curr;
+
+    for (int k = 1; k < n; k++) {
+        double L_next =
+            ((2 * k + 1 + alpha - x) * L_curr - (k + alpha) * L_prev) / (k + 1);
+        L_prev = L_curr;
+        L_curr = L_next;
+    }
+    return L_curr;
+}
+
+double radial_laguerre(int n, int l, double r, double zeta) {
+
+    if (n <= l)
+        return 0.0;
+
+    int poly_degree = n - l - 1;
+    int alpha = 2 * l + 1;
+    double rho = 2.0 * zeta * r;
+    double L_val = laguerre_gen(poly_degree, alpha, rho);
+
+    return pow(r, (double)l) * exp(-zeta * r) * L_val;
 }
 
 double radial_slater(int l, double r, double zeta) {
