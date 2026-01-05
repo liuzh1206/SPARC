@@ -178,16 +178,10 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
 
     if (!rank) {
         for (int i = 0; i < pSPARC->n_atom; i++) {
-            printf("atom %d: %4.8f  %4.8f  %4.8f\n", i, pSPARC->atom_pos[3 * i],
+            printf("atom %d: %12.8f  %12.8f  %12.8f\n", i, pSPARC->atom_pos[3 * i],
                    pSPARC->atom_pos[3 * i + 1], pSPARC->atom_pos[3 * i + 2]);
         }
     }
-
-    /* for (int i = 0; i < num_atoms; i++) { */
-    /*     atoms_cart[3 * i + 0] = pSPARC->atom_pos[3 * i + 0] * CONST_BOHR; */
-    /*     atoms_cart[3 * i + 1] = pSPARC->atom_pos[3 * i + 1] * CONST_BOHR; */
-    /*     atoms_cart[3 * i + 2] = pSPARC->atom_pos[3 * i + 2] * CONST_BOHR; */
-    /* } */
 
     double range_x =
         pSPARC->latvec_scale_x * sqrt(pSPARC->LatVec[0] * pSPARC->LatVec[0] +
@@ -248,25 +242,25 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
 
         printf("atoms_cart:\n");
         for (int i = 0; i < 3 * num_atoms; i++) {
-            printf("%4.8f  ", atoms_cart[i]);
+            printf("%12.8f  ", atoms_cart[i]);
             if ((i + 1) % 3 == 0)
                 printf("\n");
         }
 
         printf("real_lattice:\n");
         for (int i = 0; i < 3; i++) {
-            printf("%4.8f  %4.8f  %4.8f\n", real_lattice[i],
+            printf("%12.8f  %12.8f  %12.8f\n", real_lattice[i],
                    real_lattice[i + 3], real_lattice[i + 6]);
         }
         printf("recip_lattice:\n");
         for (int i = 0; i < 3; i++) {
-            printf("%4.8f  %4.8f  %4.8f\n", recip_lattice[i],
+            printf("%12.8f  %12.8f  %12.8f\n", recip_lattice[i],
                    recip_lattice[i + 3], recip_lattice[i + 6]);
         }
 
         printf("kpt_latt:\n");
         for (int i = 0; i < num_kpts; i++) {
-            printf("kpt %d: %4.8f  %4.8f  %4.8f\n", i, kpt_latt[i * 3],
+            printf("kpt %d: %12.8f  %12.8f  %12.8f\n", i, kpt_latt[i * 3],
                    kpt_latt[i * 3 + 1], kpt_latt[i * 3 + 2]);
         }
 
@@ -364,7 +358,7 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
         printf("num_wann: %d\n", num_wann);
         printf("proj_site:\n");
         for (int i = 0; i < num_bands; i++) {
-            printf(" %4.8f  %4.8f  %4.8f\n", proj_site[i * 3],
+            printf(" %12.8f  %12.8f  %12.8f\n", proj_site[i * 3],
                    proj_site[i * 3 + 1], proj_site[i * 3 + 2]);
         }
         printf("proj_l:\n");
