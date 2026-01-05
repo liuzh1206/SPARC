@@ -98,7 +98,7 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
         }
         for (int j = 0; j < pSPARC->nAtomv[i]; j++) {
             int n = 2;
-            if(pSPARC->atomType[i * L_ATMTYPE + 1] == '\0')
+            if (pSPARC->atomType[i * L_ATMTYPE + 1] == '\0')
                 n = 1;
             memcpy(atom_symbols[j + index], pSPARC->atomType + i * L_ATMTYPE,
                    n);
@@ -178,8 +178,9 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
 
     if (!rank) {
         for (int i = 0; i < pSPARC->n_atom; i++) {
-            printf("atom %d: %12.8f  %12.8f  %12.8f\n", i, pSPARC->atom_pos[3 * i],
-                   pSPARC->atom_pos[3 * i + 1], pSPARC->atom_pos[3 * i + 2]);
+            printf("atom %d: %12.8f  %12.8f  %12.8f\n", i,
+                   pSPARC->atom_pos[3 * i], pSPARC->atom_pos[3 * i + 1],
+                   pSPARC->atom_pos[3 * i + 2]);
         }
     }
 
@@ -413,8 +414,7 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    size_t mmn_size = num_kpts * pSPARC->Nspinor_eig * pSPARC->Nspin * nntot *
-                      num_bands * num_bands;
+    size_t mmn_size = num_kpts * pSPARC->Nspin * nntot * num_bands * num_bands;
     double complex *MMN_Matrix =
         (double complex *)calloc(mmn_size, sizeof(double complex));
 
@@ -448,7 +448,7 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
             FILE *fp_mmn_up = NULL;
             FILE *fp_mmn_dn = NULL;
 
-            if (pSPARC->spin_typ == 0) {
+            if (pSPARC->spin_typ != 1) {
                 printf("Writing MMN file for non-spinor calculation ...\n");
                 snprintf(mmn_filename, L_STRING, "%s.mmn", pSPARC->filename);
                 fp_mmn = fopen(mmn_filename, "w");
@@ -477,7 +477,7 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
                     int n1 = nncell[nn * num_kpts * 3 + kpt * 3 + 0];
                     int n2 = nncell[nn * num_kpts * 3 + kpt * 3 + 1];
                     int n3 = nncell[nn * num_kpts * 3 + kpt * 3 + 2];
-                    if (pSPARC->spin_typ == 0)
+                    if (pSPARC->spin_typ != 1)
                         fprintf(fp_mmn, "%5d %5d %5d %5d %5d\n", kpt + 1,
                                 image_index, n1, n2, n3);
                     else {
@@ -493,34 +493,28 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
                                            nn * num_bands * num_bands +
                                            m * num_bands + n];
 
-                            if (pSPARC->spin_typ == 0)
+                            if (pSPARC->spin_typ != 1)
                                 fprintf(fp_mmn, "%18.12f %18.12f\n",
                                         creal(mmn_element), cimag(mmn_element));
                             else {
                                 for (int spin = 0; spin < pSPARC->Nspin;
                                      spin++) {
-                                    for (int s = 0; s < pSPARC->Nspinor_eig;
-                                         s++) {
-                                        mmn_element = MMN_Matrix
-                                            [spin * pSPARC->Nkpts *
-                                                 pSPARC->Nspinor_eig * nntot *
-                                                 num_bands * num_bands +
-                                             kpt * pSPARC->Nspinor_eig * nntot *
-                                                 num_bands * num_bands +
-                                             s * nntot * num_bands * num_bands +
-                                             nn * num_bands * num_bands +
-                                             m * num_bands + n];
-                                        if (spin == 0 && s == 0) {
-                                            fprintf(fp_mmn_up,
-                                                    "%18.12f %18.12f\n",
-                                                    creal(mmn_element),
-                                                    cimag(mmn_element));
-                                        } else {
-                                            fprintf(fp_mmn_dn,
-                                                    "%18.12f %18.12f\n",
-                                                    creal(mmn_element),
-                                                    cimag(mmn_element));
-                                        }
+                                    mmn_element =
+                                        MMN_Matrix[spin * pSPARC->Nkpts *
+                                                       nntot * num_bands *
+                                                       num_bands +
+                                                   kpt * nntot * num_bands *
+                                                       num_bands +
+                                                   nn * num_bands * num_bands +
+                                                   m * num_bands + n];
+                                    if (spin == 0) {
+                                        fprintf(fp_mmn_up, "%18.12f %18.12f\n",
+                                                creal(mmn_element),
+                                                cimag(mmn_element));
+                                    } else {
+                                        fprintf(fp_mmn_dn, "%18.12f %18.12f\n",
+                                                creal(mmn_element),
+                                                cimag(mmn_element));
                                     }
                                 }
                             }
@@ -529,7 +523,7 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
                 }
             }
 
-            if (pSPARC->spin_typ == 0)
+            if (pSPARC->spin_typ != 1)
                 fclose(fp_mmn);
             else {
                 fclose(fp_mmn_up);
@@ -543,7 +537,7 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
             FILE *fp_amn_up = NULL;
             FILE *fp_amn_dn = NULL;
 
-            if (pSPARC->spin_typ == 0) {
+            if (pSPARC->spin_typ != 1) {
                 printf("Writing AMN file for non-spinor calculation ...\n");
                 snprintf(amn_filename, L_STRING, "%s.amn", pSPARC->filename);
                 fp_amn = fopen(amn_filename, "w");
@@ -573,17 +567,22 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
                         for (int spin = 0; spin < pSPARC->Nspin; spin++) {
                             for (int s = 0; s < pSPARC->Nspinor_eig; s++) {
                                 amn_element =
-                                    AMN_Matrix[(spin + s) * num_kpts *
-                                                   num_bands * num_wann +
-                                               kpt * num_bands * num_wann +
-                                               band * num_wann + iw];
-                                if (pSPARC->spin_typ == 0) {
+                                    AMN_Matrix[spin * num_kpts * num_bands *
+                                                   num_wann *
+                                                   pSPARC->Nspinor_eig +
+                                               kpt * num_bands * num_wann *
+                                                   pSPARC->Nspinor_eig +
+                                               band * num_wann *
+                                                   pSPARC->Nspinor_eig +
+                                               iw * pSPARC->Nspinor_eig + s];
+                                if (pSPARC->spin_typ == 0 &&
+                                    pSPARC->SOC_Flag == 0) {
                                     fprintf(
                                         fp_amn, "%5d %5d %5d %18.12f %18.12f\n",
                                         band + 1, iw + 1, kpt + 1,
                                         creal(amn_element), cimag(amn_element));
-                                } else {
-                                    if (spin == 0 && s == 0) {
+                                } else if (pSPARC->spin_typ == 1) {
+                                    if (spin == 0) {
                                         fprintf(fp_amn_up,
                                                 "%5d %5d %5d %18.12f %18.12f\n",
                                                 band + 1, iw + 1, kpt + 1,
@@ -596,6 +595,16 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
                                                 creal(amn_element),
                                                 cimag(amn_element));
                                     }
+                                } else {
+                                    // spinor with SOC
+                                    fprintf(
+                                        fp_amn, "%5d %5d %5d %18.12f %18.12f\n",
+                                        band + 1, 2 * iw + 1, kpt + 1,
+                                        creal(amn_element), cimag(amn_element));
+                                    fprintf(
+                                        fp_amn, "%5d %5d %5d %18.12f %18.12f\n",
+                                        band + 1, 2 * iw + 2, kpt + 1,
+                                        creal(amn_element), cimag(amn_element));
                                 }
                             }
                         }
@@ -999,10 +1008,12 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
 
                     for (int m = 0; m < num_bands; m++) {
                         for (int n = 0; n < num_bands; n++) {
+
+                            double complex mmn_element = 0.0 + 0.0 * I;
+
                             for (int s = 0; s < pSPARC->Nspinor_eig; s++) {
                                 // MMN matrix element between band m and n at
                                 // kpt and image_index
-                                double complex mmn_element = 0.0 + 0.0 * I;
                                 for (int iz = 0; iz < pSPARC->Nz; iz++) {
                                     double gz = (pSPARC->Nz > 1)
                                                     ? ((double)iz /
@@ -1075,17 +1086,13 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
                                         }
                                     }
                                 }
-
-                                /* mmn_element /= pSPARC->Nd; // Normalize */
-                                MMN_Matrix[spin * pSPARC->Nkpts_sym *
-                                               pSPARC->Nspinor_eig * nntot *
-                                               num_bands * num_bands +
-                                           kpt * pSPARC->Nspinor_eig * nntot *
-                                               num_bands * num_bands +
-                                           s * nntot * num_bands * num_bands +
-                                           nn * num_bands * num_bands +
-                                           m * num_bands + n] = mmn_element;
                             }
+                            /* mmn_element /= pSPARC->Nd; // Normalize */
+                            MMN_Matrix[spin * pSPARC->Nkpts_sym * nntot *
+                                           num_bands * num_bands +
+                                       kpt * nntot * num_bands * num_bands +
+                                       nn * num_bands * num_bands +
+                                       m * num_bands + n] = mmn_element;
                         }
                     }
                 }
@@ -1337,10 +1344,13 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                     }
                                 }
 
-                                AMN_Matrix[(spin + s) * num_kpts * num_bands *
-                                               num_wann +
-                                           kpt * num_bands * num_wann +
-                                           band * num_wann + iw] =
+                                AMN_Matrix[spin * num_kpts * num_bands *
+                                               num_wann * pSPARC->Nspinor_eig +
+                                           kpt * num_bands * num_wann *
+                                               pSPARC->Nspinor_eig +
+                                           band * num_wann *
+                                               pSPARC->Nspinor_eig +
+                                           iw * pSPARC->Nspinor_eig + s] =
                                     accum * pSPARC->dV;
                             }
                         }
