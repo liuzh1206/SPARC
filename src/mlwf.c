@@ -435,7 +435,8 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
 
     Calculate_AMN(pSPARC, num_bands, num_kpts, num_wann, exclude_bands,
                   proj_site, proj_l, proj_m, proj_radial, proj_z, proj_x,
-                  proj_zona, gamma_only, spinors, AMN_Matrix);
+                  proj_zona, proj_s, proj_s_qaxis, gamma_only, spinors,
+                  AMN_Matrix);
 
     if (!rank) {
         if (pSPARC->wannierMMNAMNFlag) {
@@ -1112,8 +1113,9 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
 void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                    int *exclude_bands, double *proj_site, int *proj_l,
                    int *proj_m, int *proj_radial, double *proj_z,
-                   double *proj_x, double *proj_zona, int gamma_only,
-                   int spinor, double complex *AMN_Matrix) {
+                   double *proj_x, double *proj_zona, int *proj_s,
+                   double *proj_s_qaxis, int gamma_only, int spinor,
+                   double complex *AMN_Matrix) {
     int rank;
     int size;
 
