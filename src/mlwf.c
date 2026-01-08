@@ -339,9 +339,9 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
         // print wannier outputs
         printf("nntot: %5d\n", nntot);
         printf("nnlist:\n");
-        for (int i = 0; i < nntot; i++) {
-            for (int j = 0; j < num_kpts; j++) {
-                printf("%5d", nnlist[i * num_kpts + j]);
+        for (int nn = 0; nn < nntot; nn++) {
+            for (int kpt = 0; kpt < num_kpts; kpt++) {
+                printf("%5d", nnlist[nn * num_kpts + kpt]);
             }
             printf("\n");
         }
@@ -418,8 +418,7 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
     double complex *MMN_Matrix =
         (double complex *)calloc(mmn_size, sizeof(double complex));
 
-    size_t amn_size =
-        pSPARC->Nspin * pSPARC->Nspinor_eig * num_kpts * num_bands * num_wann;
+    size_t amn_size = pSPARC->Nspin * num_kpts * num_bands * num_wann;
 
     double complex *AMN_Matrix =
         (double complex *)calloc(amn_size, sizeof(double complex));
@@ -566,52 +565,36 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
                     for (int band = 0; band < num_bands; band++) {
                         double complex amn_element = 0.0 + 0.0 * I;
                         for (int spin = 0; spin < pSPARC->Nspin; spin++) {
-                            for (int s = 0; s < pSPARC->Nspinor_eig; s++) {
-                                amn_element =
-                                    AMN_Matrix[spin * num_kpts * num_bands *
-                                                   num_wann *
-                                                   pSPARC->Nspinor_eig +
-                                               kpt * num_bands * num_wann *
-                                                   pSPARC->Nspinor_eig +
-                                               band * num_wann *
-                                                   pSPARC->Nspinor_eig +
-                                               iw * pSPARC->Nspinor_eig + s];
-                                if (pSPARC->spin_typ == 0 &&
-                                    pSPARC->SOC_Flag == 0) {
-                                    fprintf(
-                                        fp_amn, "%5d %5d %5d %18.12f %18.12f\n",
+                            amn_element =
+                                AMN_Matrix[spin * num_kpts * num_bands *
+                                               num_wann +
+                                           kpt * num_bands * num_wann +
+                                           band * num_wann + iw];
+                            if (pSPARC->spin_typ) {
+                                // collinear spin case
+                                if (spin == 0) {
+                                    fprintf(fp_amn_up,
+                                            "%5d %5d %5d %18.12f %18.12f\n",
+                                            band + 1, iw + 1, kpt + 1,
+                                            creal(amn_element),
+                                            cimag(amn_element));
+                                } else {
+                                    fprintf(fp_amn_dn,
+                                            "%5d %5d %5d %18.12f %18.12f\n",
+                                            band + 1, iw + 1, kpt + 1,
+                                            creal(amn_element),
+                                            cimag(amn_element));
+                                }
+                            } else {
+                                // spinor or non-spin case
+                                fprintf(fp_amn, "%5d %5d %5d %18.12f %18.12f\n",
                                         band + 1, iw + 1, kpt + 1,
                                         creal(amn_element), cimag(amn_element));
-                                } else if (pSPARC->spin_typ == 1) {
-                                    if (spin == 0) {
-                                        fprintf(fp_amn_up,
-                                                "%5d %5d %5d %18.12f %18.12f\n",
-                                                band + 1, iw + 1, kpt + 1,
-                                                creal(amn_element),
-                                                cimag(amn_element));
-                                    } else {
-                                        fprintf(fp_amn_dn,
-                                                "%5d %5d %5d %18.12f %18.12f\n",
-                                                band + 1, iw + 1, kpt + 1,
-                                                creal(amn_element),
-                                                cimag(amn_element));
-                                    }
-                                } else {
-                                    // spinor with SOC
-                                    fprintf(
-                                        fp_amn, "%5d %5d %5d %18.12f %18.12f\n",
-                                        band + 1, 2 * iw + 1, kpt + 1,
-                                        creal(amn_element), cimag(amn_element));
-                                    fprintf(
-                                        fp_amn, "%5d %5d %5d %18.12f %18.12f\n",
-                                        band + 1, 2 * iw + 2, kpt + 1,
-                                        creal(amn_element), cimag(amn_element));
-                                }
                             }
-                        }
-                    }
-                }
-            }
+                        } // end of spin
+                    } // end of band
+                } // end of iw
+            } // end of kpt
 
             if (pSPARC->spin_typ == 0)
                 fclose(fp_amn);
@@ -1051,8 +1034,7 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
                                                          bcart[1] * r[1] +
                                                          bcart[2] * r[2];
 
-                                            double complex psi =
-                                                cos(phi) - I * sin(phi);
+                                            double complex psi = exp(-I * phi);
                                             // pSPARC->Xorb_kpt[];
                                             mmn_element +=
                                                 conj(
@@ -1094,12 +1076,12 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
                                        kpt * nntot * num_bands * num_bands +
                                        nn * num_bands * num_bands +
                                        m * num_bands + n] = mmn_element;
-                        }
-                    }
-                }
-            }
-        }
-    }
+                        } // end of n
+                    } // end of m
+                } // end of nntot
+            } // end of kpt
+        } // end of spin
+    } // end of if (!rank)
 
     if (!rank)
         printf("Finish calculating MMN ...\n");
@@ -1179,7 +1161,7 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
 
                 for (int iw = 0; iw < num_wann; ++iw) {
 
-                    double complex accum = 0.0 + 0.0 * I;
+                    double complex amn_element = 0.0 + 0.0 * I;
 
                     if (!excluded) {
 
@@ -1225,9 +1207,32 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                         // double complex psi_sum = 0.0 + 0.0 * I;
                         for (int spin = 0; spin < pSPARC->Nspin; spin++) {
 
-                            for (int s = 0; s < pSPARC->Nspinor_eig; s++) {
+                            amn_element = 0.0 + 0.0 * I;
 
-                                accum = 0.0 + 0.0 * I;
+                            double complex chi_up = 0.0 + 0.0 * I;
+                            double complex chi_dn = 0.0 + 0.0 * I;
+                            if (spinor == 1) {
+                                double qx = proj_s_qaxis[3 * proj_index + 0];
+                                double qy = proj_s_qaxis[3 * proj_index + 1];
+                                double qz = proj_s_qaxis[3 * proj_index + 2];
+                                double qnorm =
+                                    sqrt(qx * qx + qy * qy + qz * qz);
+                                if (qnorm > 1e-8) {
+                                    qx /= qnorm;
+                                    qy /= qnorm;
+                                    qz /= qnorm;
+                                } else {
+                                    qx = 0.0;
+                                    qy = 0.0;
+                                    qz = 1.0;
+                                }
+                                double theta = acos(qz);
+                                double phi = atan2(qy, qx);
+                                chi_up = cos(theta / 2.0) * exp(-I * phi / 2.0);
+                                chi_dn = sin(theta / 2.0) * exp(I * phi / 2.0);
+                            }
+
+                            for (int s = 0; s < pSPARC->Nspinor_eig; s++) {
 
                                 for (int iz = 0; iz < Nz; iz++) {
                                     double gz =
@@ -1263,7 +1268,7 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                                  (pSPARC->k3_fc[kpt] *
                                                   shift_z));
                                             double complex phase_factor =
-                                                cos(k_dot_R) - I * sin(k_dot_R);
+                                                exp(-I * k_dot_R);
 
                                             double rglob[3];
 
@@ -1338,28 +1343,38 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                                        band * Nd *
                                                            pSPARC->Nspinor_eig +
                                                        s * Nd;
+
                                             double complex psi =
                                                 orbital_global[base + gindex];
-                                            accum += psi * phase_factor *
-                                                     conj(phi_proj);
-                                        }
-                                    }
-                                }
 
-                                AMN_Matrix[spin * num_kpts * num_bands *
-                                               num_wann * pSPARC->Nspinor_eig +
-                                           kpt * num_bands * num_wann *
-                                               pSPARC->Nspinor_eig +
-                                           band * num_wann *
-                                               pSPARC->Nspinor_eig +
-                                           iw * pSPARC->Nspinor_eig + s] =
-                                    accum * pSPARC->dV;
-                            }
-                        }
-                    } /* !excluded */
-                }
-            }
-        }
+                                            if (spinor) {
+                                                if (s == 0) {
+                                                    amn_element +=
+                                                        psi * phase_factor *
+                                                        conj(phi_proj * chi_up);
+                                                } else {
+                                                    amn_element +=
+                                                        psi * phase_factor *
+                                                        conj(phi_proj * chi_dn);
+                                                }
+                                            } else {
+                                                amn_element += psi *
+                                                               phase_factor *
+                                                               conj(phi_proj);
+                                            } // end of spinor if
+                                        } // end of ix
+                                    } // end of iy
+                                } // end of iz
+                            } // end of s
+                            AMN_Matrix[spin * num_kpts * num_bands * num_wann +
+                                       kpt * num_bands * num_wann +
+                                       band * num_wann + iw] =
+                                amn_element * pSPARC->dV;
+                        } // end of spin
+                    } // !excluded
+                } // end of iw
+            } // end of band
+        } // end of kpt
     } /* rank 0 */
 
 #ifdef DEBUG
