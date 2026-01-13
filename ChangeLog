@@ -2,6 +2,60 @@
 -Date
 -Name
 -changes
+
+--------------
+December 03, 2025
+Name: Sayan Bhowmik
+Changes: (src/xc/exx/exactExchangeInitialization.c)
+1. Datatype change in memory estimate function to avoid integer overflow for high memory situations.
+
+--------------
+November 28, 2025
+Name: Tian Tian
+Changes: (.github/*)
+1. Bug fix in CI workflow
+
+--------------
+November 25, 2025
+Name: Sayan Bhowmik
+Changes: (src/xc/hubbard/occupationMatrix.c)
+1. Bug fix in the atom counter for occupation matrix extrapolation.
+
+--------------
+November 19, 2025
+Name: Qihao Cheng
+Changes: utils/pdos/, utils/atom/
+1. Added XC functional fallback in PDOS: unsupported SPARC functionals now default to GGA_PBE for atomic orbital generation.
+2. Extended atomic DFT module to support EXX and RPA (OEP-based implementation).
+3. Added thread-parallel RPA frequency evaluation and improved standalone atomic code performance.
+
+--------------
+November 07, 2025
+Name: Qihao Cheng
+Changes: utils/pdos/, utils/atom/
+1. Add projected density of states (PDOS) post-processing module, including configuration file, example scripts, and sample outputs.
+2. Add atomic utilities and related submodules (mesh, pseudo, scf, xc, etc.) for standalone atomic DFT calculations.
+
+--------------
+October 03, 2025
+Name: Sayan Bhowmik
+Changes: (src/relax.c)
+1. Make LATVEC norm 1 in geopt file (consistent with .out file).
+
+--------------
+September 25, 2025
+Name: Rajat kumar, Abhiraj Sharma
+Changes: src/cyclix/cyclix_stress.c, src/cyclix/cyclix_stress.h, src/stress.c, tests/cyclix
+1. Bug fixes in stress in cyclix due to more than 1 kpts/processor as well as spin calculation
+2. Bug fix in stress units in .out file as well as Ha/Bohr to GPa conversion
+3. Fixed reference results both standard as well as high accuracy in cyclix
+
+--------------
+September 04, 2025
+Name: Sayan Bhowmik
+Changes: (src/md.c)
+1. Bug fix in minimum pairwise distance calculation - include PBC/MIC.
+
 --------------
 September 03, 2025
 Name: Tian Tian
