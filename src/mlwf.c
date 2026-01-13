@@ -204,28 +204,28 @@ void Generate_Wannier_Inputs(SPARC_OBJ *pSPARC) {
                 index += pSPARC->nAtomv[k];
         }
         for (int j = 0; j < pSPARC->nAtomv[i]; j++) {
-            index += j;
+            int atom_idx = index + j;
             if (pSPARC->IsFrac[i]) {
                 double atom_fc[3];
-                atom_fc[0] = pSPARC->atom_pos[3 * index + 0] / range_x;
-                atom_fc[1] = pSPARC->atom_pos[3 * index + 1] / range_y;
-                atom_fc[2] = pSPARC->atom_pos[3 * index + 2] / range_z;
-                atoms_cart[3 * index + 0] = atom_fc[0] * a1[0] +
-                                            atom_fc[1] * a2[0] +
-                                            atom_fc[2] * a3[0];
-                atoms_cart[3 * index + 1] = atom_fc[0] * a1[1] +
-                                            atom_fc[1] * a2[1] +
-                                            atom_fc[2] * a3[1];
-                atoms_cart[3 * index + 2] = atom_fc[0] * a1[2] +
-                                            atom_fc[1] * a2[2] +
-                                            atom_fc[2] * a3[2];
+                atom_fc[0] = pSPARC->atom_pos[3 * atom_idx + 0] / range_x;
+                atom_fc[1] = pSPARC->atom_pos[3 * atom_idx + 1] / range_y;
+                atom_fc[2] = pSPARC->atom_pos[3 * atom_idx + 2] / range_z;
+                atoms_cart[3 * atom_idx + 0] = atom_fc[0] * a1[0] +
+                                               atom_fc[1] * a2[0] +
+                                               atom_fc[2] * a3[0];
+                atoms_cart[3 * atom_idx + 1] = atom_fc[0] * a1[1] +
+                                               atom_fc[1] * a2[1] +
+                                               atom_fc[2] * a3[1];
+                atoms_cart[3 * atom_idx + 2] = atom_fc[0] * a1[2] +
+                                               atom_fc[1] * a2[2] +
+                                               atom_fc[2] * a3[2];
             } else {
-                atoms_cart[3 * index + 0] =
-                    pSPARC->atom_pos[3 * index + 0] * CONST_BOHR;
-                atoms_cart[3 * index + 1] =
-                    pSPARC->atom_pos[3 * index + 1] * CONST_BOHR;
-                atoms_cart[3 * index + 2] =
-                    pSPARC->atom_pos[3 * index + 2] * CONST_BOHR;
+                atoms_cart[3 * atom_idx + 0] =
+                    pSPARC->atom_pos[3 * atom_idx + 0] * CONST_BOHR;
+                atoms_cart[3 * atom_idx + 1] =
+                    pSPARC->atom_pos[3 * atom_idx + 1] * CONST_BOHR;
+                atoms_cart[3 * atom_idx + 2] =
+                    pSPARC->atom_pos[3 * atom_idx + 2] * CONST_BOHR;
             }
         }
     }
@@ -919,9 +919,7 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
         a3[1] = pSPARC->LatVec[7] * Lz;
         a3[2] = pSPARC->LatVec[8] * Lz;
 
-        double b1[3];
-        double b2[3];
-        double b3[3];
+        double b1[3], b2[3], b3[3];
         double volume = 0.0;
         double crossx, crossy, crossz;
 
@@ -953,42 +951,22 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
         for (int spin = 0; spin < pSPARC->Nspin; spin++) {
             for (int kpt = 0; kpt < num_kpts; kpt++) {
 
-                double kcart[3] = {
-                    pSPARC->k1_fc[kpt] * b1[0] + pSPARC->k2_fc[kpt] * b2[0] +
-                        pSPARC->k3_fc[kpt] * b3[0],
-                    pSPARC->k1_fc[kpt] * b1[1] + pSPARC->k2_fc[kpt] * b2[1] +
-                        pSPARC->k3_fc[kpt] * b3[1],
-                    pSPARC->k1_fc[kpt] * b1[2] + pSPARC->k2_fc[kpt] * b2[2] +
-                        pSPARC->k3_fc[kpt] * b3[2]};
-
                 for (int nn = 0; nn < nntot; nn++) {
 
                     int image_index = nnlist[nn * num_kpts + kpt] - 1;
-
-                    double kpcart[3] = {pSPARC->k1_fc[image_index] * b1[0] +
-                                            pSPARC->k2_fc[image_index] * b2[0] +
-                                            pSPARC->k3_fc[image_index] * b3[0],
-                                        pSPARC->k1_fc[image_index] * b1[1] +
-                                            pSPARC->k2_fc[image_index] * b2[1] +
-                                            pSPARC->k3_fc[image_index] * b3[1],
-                                        pSPARC->k1_fc[image_index] * b1[2] +
-                                            pSPARC->k2_fc[image_index] * b2[2] +
-                                            pSPARC->k3_fc[image_index] * b3[2]};
-
-                    double bcart[3] = {kpcart[0] - kcart[0],
-                                       kpcart[1] - kcart[1],
-                                       kpcart[2] - kcart[2]};
 
                     int n1 = nncell[nn * num_kpts * 3 + kpt * 3 + 0];
                     int n2 = nncell[nn * num_kpts * 3 + kpt * 3 + 1];
                     int n3 = nncell[nn * num_kpts * 3 + kpt * 3 + 2];
 
-                    bcart[0] += (double)n1 * b1[0] + (double)n2 * b2[0] +
-                                (double)n3 * b3[0];
-                    bcart[1] += (double)n1 * b1[1] + (double)n2 * b2[1] +
-                                (double)n3 * b3[1];
-                    bcart[2] += (double)n1 * b1[2] + (double)n2 * b2[2] +
-                                (double)n3 * b3[2];
+                    double bcart[3];
+
+                    bcart[0] = (double)n1 * b1[0] + (double)n2 * b2[0] +
+                               (double)n3 * b3[0];
+                    bcart[1] = (double)n1 * b1[1] + (double)n2 * b2[1] +
+                               (double)n3 * b3[1];
+                    bcart[2] = (double)n1 * b1[2] + (double)n2 * b2[2] +
+                               (double)n3 * b3[2];
 
                     for (int m = 0; m < num_bands; m++) {
                         for (int n = 0; n < num_bands; n++) {
@@ -1034,8 +1012,8 @@ void Calculate_MMN(SPARC_OBJ *pSPARC, int num_kpts, int nntot, int *nnlist,
                                                          bcart[1] * r[1] +
                                                          bcart[2] * r[2];
 
-                                            double complex psi = exp(-I * phi);
-                                            // pSPARC->Xorb_kpt[];
+                                            double complex psi = cexp(I * phi);
+                                            psi = 1.0 + 0.0 * I;
                                             mmn_element +=
                                                 conj(
                                                     orbital_global
@@ -1152,9 +1130,37 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
         int Nz = pSPARC->Nz;
         int Nd = pSPARC->Nd;
 
+        double b1[3], b2[3], b3[3];
+        // Calculate b1
+        Cross_Product(&crossx, &crossy, &crossz, a2[0], a2[1], a2[2], a3[0],
+                      a3[1], a3[2]);
+        b1[0] = 2.0 * M_PI * crossx / (volume);
+        b1[1] = 2.0 * M_PI * crossy / (volume);
+        b1[2] = 2.0 * M_PI * crossz / (volume);
+        // Calculate b2
+        Cross_Product(&crossx, &crossy, &crossz, a3[0], a3[1], a3[2], a1[0],
+                      a1[1], a1[2]);
+        b2[0] = 2.0 * M_PI * crossx / (volume);
+        b2[1] = 2.0 * M_PI * crossy / (volume);
+        b2[2] = 2.0 * M_PI * crossz / (volume);
+        // Calculate b3
+        Cross_Product(&crossx, &crossy, &crossz, a1[0], a1[1], a1[2], a2[0],
+                      a2[1], a2[2]);
+        b3[0] = 2.0 * M_PI * crossx / (volume);
+        b3[1] = 2.0 * M_PI * crossy / (volume);
+        b3[2] = 2.0 * M_PI * crossz / (volume);
+
         for (int kpt = 0; kpt < num_kpts; ++kpt) {
 
             for (int band = 0; band < num_bands; ++band) {
+
+                double complex kcart[3] = {
+                    pSPARC->k1_fc[kpt] * b1[0] + pSPARC->k2_fc[kpt] * b2[0] +
+                        pSPARC->k3_fc[kpt] * b3[0],
+                    pSPARC->k1_fc[kpt] * b1[1] + pSPARC->k2_fc[kpt] * b2[1] +
+                        pSPARC->k3_fc[kpt] * b3[1],
+                    pSPARC->k1_fc[kpt] * b1[2] + pSPARC->k2_fc[kpt] * b2[2] +
+                        pSPARC->k3_fc[kpt] * b3[2]};
 
                 int excluded =
                     (exclude_bands != NULL && exclude_bands[band] != 0);
@@ -1268,7 +1274,20 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                                  (pSPARC->k3_fc[kpt] *
                                                   shift_z));
                                             double complex phase_factor =
-                                                exp(-I * k_dot_R);
+                                                cexp(-I * 2 * M_PI * k_dot_R);
+
+                                            double rcart[3] = {
+                                                dxf * a1[0] + dyf * a2[0] +
+                                                    dzf * a3[0],
+                                                dxf * a1[1] + dyf * a2[1] +
+                                                    dzf * a3[1],
+                                                dxf * a1[2] + dyf * a2[2] +
+                                                    dzf * a3[2]};
+
+                                            phase_factor *= cexp(
+                                                -I * (kcart[0] * rcart[0] +
+                                                      kcart[1] * rcart[1] +
+                                                      kcart[2] * rcart[2]));
 
                                             double rglob[3];
 
@@ -1307,16 +1326,10 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                                 HybridYlm(l, m, rloc[0],
                                                           rloc[1], rloc[2]);
 
-                                            /* double Rl = */
-                                            /*     (radial == 0) */
-                                            /*         ? 0.0 */
-                                            /*         : Radial(radial, r,
-                                             * zona); */
                                             int l_radial = l;
                                             if (l < 0)
-                                                l_radial = 0;
-                                            /* double Rl = radial_gaussian( */
-                                            /*     l_radial, r, zona); */
+                                                l_radial = -l;
+
                                             double Rl = 0;
                                             if (radial > 0) {
                                                 Rl = radial_laguerre(
@@ -1325,9 +1338,6 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                                                 Rl = radial_gaussian(l_radial,
                                                                      r, zona);
                                             }
-
-                                            /* double Rl = */
-                                            /*     radial_slater(l, r, zona); */
 
                                             double phi_proj = Rl * Theta_lm;
 
@@ -1368,8 +1378,7 @@ void Calculate_AMN(SPARC_OBJ *pSPARC, int num_bands, int num_kpts, int num_wann,
                             } // end of s
                             AMN_Matrix[spin * num_kpts * num_bands * num_wann +
                                        kpt * num_bands * num_wann +
-                                       band * num_wann + iw] =
-                                amn_element * pSPARC->dV;
+                                       band * num_wann + iw] = amn_element;
                         } // end of spin
                     } // !excluded
                 } // end of iw
